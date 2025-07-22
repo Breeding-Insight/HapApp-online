@@ -1,0 +1,107 @@
+  # Only extract RefMatch and AltMatch alleles for determining allele identity and assigning existing IDs or new IDs
+    # Retain a RefMatch or AltMatch based on whichever is smaller below:
+      * At least 10 samples, each having a minimum of 2 reads
+      * At least 5% samples, each having a minimum of 2 reads
+
+      * Number of RefMatch and AltMatch alleles DISCARDED:  15457
+      * Number of RefMatch and AltMatch alleles RETAINED:  6082
+
+
+Building a new DB, current time: 07/09/2024 15:44:27
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID_match_cutadapt.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID_match_cutadapt.fa
+Sequence type: Nucleotide
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 6080 sequences in 0.099196 seconds.
+
+
+Running: get_duplicate_alleles_lists(blast):
+Number of duplicate allele lists: 168
+Number of duplicate allele lists after merging lists with comment haps: 168
+
+Running get_longest_alleles(dup_alleles_lists):
+Number of unique alleles after concatenating duplicate alleles:  168
+Number of duplicate alleles that need to be removed:  207
+
+Running concat_duplicate_allele_readCount(tmp_rename_report, dup_alleles_lists_noLength, longest_alleles_list)
+Number of alleles in the original report: 12082
+Number of unique alleles out of the duplicated ones: 168
+
+Running remove_duplicate_alleles_in_cutadapt_fasta(cutadapt_fasta, longest_alleles, remove_alleles):
+Number of alleles in the original fasta file:  6080
+Number of duplicate alleles removed:  207
+
+## Processing /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID_tmp_rename_updatedSeq.csv
+
+## Creating /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037.readme
+# Update this query: ['chr3.1_083413539|RefMatch_tmp_0002', '81', '1', '43', 'chr3.1_083413539|RefMatch_0005', '81', '1', '43', '43', '89', '100.000', '2.09e-18']
+# With this one: ['chr3.1_083413539|RefMatch_tmp_0002', '81', '1', '81', 'chr3.1_083413539|RefMatch_0004', '81', '1', '69', '81', '100', '85.185', '1.29e-16']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0011', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.43e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0011', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.66e-26']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0012', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.43e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0012', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.66e-26']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0019', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.43e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0019', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.66e-26']
+# Update this query: ['chr5.1_004668482|AltMatch_tmp_0001', '77', '1', '55', 'chr5.1_004668482|AltMatch_0003', '70', '1', '55', '55', '71', '96.364', '8.08e-21']
+# With this one: ['chr5.1_004668482|AltMatch_tmp_0001', '77', '1', '57', 'chr5.1_004668482|AltMatch_0001', '81', '1', '57', '57', '74', '92.982', '3.07e-17']
+# Update this query: ['chr5.1_021232571|AltMatch_tmp_0001', '81', '1', '48', 'chr5.1_021232571|AltMatch_0006', '70', '1', '48', '48', '99', '100.000', '2.17e-21']
+# With this one: ['chr5.1_021232571|AltMatch_tmp_0001', '81', '1', '50', 'chr5.1_021232571|AltMatch_0005', '70', '1', '50', '50', '95', '98.000', '3.39e-20']
+# Update this query: ['chr8.1_051569772|RefMatch_tmp_0002', '81', '1', '52', 'chr8.1_051569772|RefMatch_0016', '81', '1', '52', '52', '99', '100.000', '8.92e-24']
+# With this one: ['chr8.1_051569772|RefMatch_tmp_0002', '81', '1', '53', 'chr8.1_051569772|RefMatch_0042', '81', '1', '53', '53', '65', '98.113', '5.50e-22']
+# Update this query: ['chr8.1_051569772|RefMatch_tmp_0003', '81', '1', '52', 'chr8.1_051569772|RefMatch_0016', '81', '1', '52', '52', '99', '100.000', '8.92e-24']
+# With this one: ['chr8.1_051569772|RefMatch_tmp_0003', '81', '1', '53', 'chr8.1_051569772|RefMatch_0042', '81', '1', '53', '53', '65', '98.113', '5.50e-22']
+# Update this query: ['chr1.1_075668041|AltMatch_tmp_0007', '70', '1', '51', 'chr1.1_075668041|AltMatch_0005', '81', '1', '51', '51', '73', '98.039', '7.42e-21']
+# With this one: ['chr1.1_075668041|AltMatch_tmp_0007', '70', '1', '54', 'chr1.1_075668041|AltMatch_0015', '70', '1', '54', '54', '77', '96.296', '2.93e-20']
+# Update this query: ['chr3.1_016909645|RefMatch_tmp_0006', '73', '1', '60', 'chr3.1_016909645|RefMatch_0007', '81', '1', '60', '60', '82', '100.000', '1.36e-28']
+# With this one: ['chr3.1_016909645|RefMatch_tmp_0006', '73', '1', '73', 'chr3.1_016909645|RefMatch_0010', '81', '1', '73', '73', '100', '93.151', '2.05e-24']
+# Update this query: ['chr3.1_016909645|RefMatch_tmp_0007', '73', '1', '60', 'chr3.1_016909645|RefMatch_0007', '81', '1', '60', '60', '82', '100.000', '1.36e-28']
+# With this one: ['chr3.1_016909645|RefMatch_tmp_0007', '73', '1', '61', 'chr3.1_016909645|RefMatch_0009', '70', '1', '61', '61', '84', '96.721', '2.05e-24']
+# Update this query: ['chr3.1_022654519|RefMatch_tmp_0002', '81', '1', '49', 'chr3.1_022654519|RefMatch_0009', '81', '1', '49', '49', '60', '100.000', '5.50e-22']
+# With this one: ['chr3.1_022654519|RefMatch_tmp_0002', '81', '1', '63', 'chr3.1_022654519|RefMatch_0027', '81', '1', '63', '63', '78', '93.651', '8.59e-21']
+  # Number of queries written out:  5848
+100% coverage, but <90% identity ['chr3.1_083413539|RefMatch_tmp_0002', '81', '1', '81', 'chr3.1_083413539|RefMatch_0004', '81', '1', '69', '81', '100', '85.185', '1.29e-16']
+100% coverage, but <90% identity ['chr4.1_030794163|RefMatch_tmp_0001', '70', '1', '70', 'chr4.1_030794163|RefMatch_0009', '70', '1', '70', '70', '100', '88.571', '1.74e-15']
+100% coverage, but <90% identity ['chr4.1_085591844|RefMatch_tmp_0001', '76', '1', '76', 'chr4.1_085591844|RefMatch_0006', '81', '1', '70', '76', '100', '86.842', '7.61e-15']
+100% coverage, but <90% identity ['chr7.1_006496412|AltMatch_tmp_0001', '78', '1', '78', 'chr7.1_006496412|AltMatch_0001', '81', '1', '70', '78', '100', '88.462', '1.28e-19']
+100% coverage, but <90% identity ['chr1.1_070030472|RefMatch_tmp_0001', '70', '1', '70', 'chr1.1_070030472|RefMatch_0009', '70', '1', '70', '70', '100', '87.143', '4.25e-13']
+
+## 2024-07-09, 15:44:45
+## Analyze BLAST results of the RefMatch and AltMatch alleles in this report:
+  # Alleles from DArTag reports are different lengths
+  * Number of RefMatch and AltMatch alleles with fixed ID assigned:  5749
+    - Number of RefMatch and AltMatch alleles already existing in the database:  5632
+    - Number of NEW alleles found in this report:  117
+  * Number of alleles discarded because of low BLAST sequence coverage/identity:  99
+
+## Number of RefMatch and AltMatch alleles having the same sequences:
+  * Number of RefMatch and AltMatch alleles aligned to the same alleles in the database:  0
+  * Number of RefMatch and AltMatch alleles after COMBINING those with the same sequences:  0
+
+## Assign fixed allele IDs to RefMatch and AltMatch alleles in this report:
+  * Number of RefMatch and AltMatch alleles assigned fixed IDs:  5749
+  * Number of RefMatch and AltMatch alleles discarded because of low coverage/identity or same sequences:  126
+
+## Update allele COUNT database with new allele counts for RefMatch and AltMatch:
+  * Existing allele COUNT database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v036_matchCnt_lut.txt
+  * Updated allele COUNT database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037_matchCnt_lut.txt
+
+## Update allele SEQUENCE database (FASTA) with new RefMatch and AltMatch alleles:
+  * Existing allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v036.fa
+    - Number of allele sequences in existing database:  31262
+  * Updated allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037.fa
+    - Number of allele sequences in the updated database:  31379
+
+
+Building a new DB, current time: 07/09/2024 15:44:46
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037.fa
+Sequence type: Nucleotide
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 31379 sequences in 0.486062 seconds.
+
+
+# Running: get_duplicate_alleles(blast): /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037.fa.self.bn
+# Number of duplicate allele pairs:  0
+# No duplicate microhaplotypes in current db: /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v037.fa.self.bn

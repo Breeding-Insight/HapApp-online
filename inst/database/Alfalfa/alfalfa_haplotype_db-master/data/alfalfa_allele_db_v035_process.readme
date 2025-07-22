@@ -1,0 +1,139 @@
+
+#  1). Filter alleles with missing data and generate RefMatch and AltMatch allele fasta and a temporary report
+  # Only extract RefMatch and AltMatch alleles for determining allele identity and assigning existing IDs or new IDs
+    # Retain a RefMatch or AltMatch based on whichever is smaller below:
+      * At least 10 samples, each having a minimum of 2 reads
+      * At least 5% samples, each having a minimum of 2 reads
+
+      * Number of RefMatch and AltMatch alleles DISCARDED:  1393
+      * Number of RefMatch and AltMatch alleles RETAINED:  3506
+
+#  2). Remove adapters using cutadapt
+
+#  3). Check if there are duplicate alleles after removing adapters AND update allele sequences and read counts
+
+
+Building a new DB, current time: 07/19/2024 09:33:15
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P11_Longxi_droughtGWAS_6plates/data/DAl22-7535_MADC_snpID_addZero_match_cutadapt.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P11_Longxi_droughtGWAS_6plates/data/DAl22-7535_MADC_snpID_addZero_match_cutadapt.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P11_Longxi_droughtGWAS_6plates/data/DAl22-7535_MADC_snpID_addZero_match_cutadapt.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 3506 sequences in 0.0643671 seconds.
+
+
+
+#  Check uniqueness of alleles
+Running: get_duplicate_alleles_lists(blast):
+Number of duplicate allele lists: 48
+Number of duplicate allele lists after merging lists with comment haps: 48
+
+Running get_longest_alleles(dup_alleles_lists):
+Number of unique alleles after concatenating duplicate alleles:  48
+Number of duplicate alleles that need to be removed:  74
+
+Running concat_duplicate_allele_readCount(tmp_rename_report, dup_alleles_lists_noLength, longest_alleles_list)
+Number of alleles in the original report: 9500
+Number of unique alleles out of the duplicated ones: 48
+
+Running remove_duplicate_alleles_in_cutadapt_fasta(cutadapt_fasta, longest_alleles, remove_alleles):
+Number of alleles in the original fasta file:  3506
+Number of duplicate alleles removed:  74
+
+#  4). BLAST against microhaplotype db
+
+#  5). Determine status of RefMatch and AltMatch and Assign fixed IDs to them
+
+## Processing /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P11_Longxi_droughtGWAS_6plates/data/DAl22-7535_MADC_snpID_addZero_tmp_rename_updatedSeq.csv
+
+## Creating /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.readme
+# Update this query: ['chr4.1_074846334|RefMatch_tmp_0005', '81', '1', '67', 'chr4.1_074846334|RefMatch_0016', '67', '1', '67', '67', '83', '100.000', '9.46e-33']
+# With this one: ['chr4.1_074846334|RefMatch_tmp_0005', '81', '1', '68', 'chr4.1_074846334|RefMatch_0007', '81', '1', '68', '68', '84', '98.529', '5.83e-31']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0012', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.31e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0012', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.47e-26']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0013', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.31e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0013', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.47e-26']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0017', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.31e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0017', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.47e-26']
+# Update this query: ['chr6.1_034756647|RefMatch_tmp_0001', '81', '1', '79', 'chr6.1_034756647|RefMatch_0012', '81', '1', '81', '81', '98', '97.531', '1.53e-34']
+# With this one: ['chr6.1_034756647|RefMatch_tmp_0001', '81', '1', '80', 'chr6.1_034756647|RefMatch_0006', '78', '1', '78', '80', '99', '97.500', '6.06e-34']
+# Update this query: ['chr6.1_034756647|RefMatch_tmp_0001', '81', '1', '80', 'chr6.1_034756647|RefMatch_0006', '78', '1', '78', '80', '99', '97.500', '6.06e-34']
+# With this one: ['chr6.1_034756647|RefMatch_tmp_0001', '81', '1', '81', 'chr6.1_034756647|RefMatch_0005', '81', '1', '81', '81', '100', '96.296', '6.06e-34']
+# Update this query: ['chr8.1_051569772|RefMatch_tmp_0001', '81', '1', '52', 'chr8.1_051569772|RefMatch_0016', '81', '1', '52', '52', '99', '100.000', '8.45e-24']
+# With this one: ['chr8.1_051569772|RefMatch_tmp_0001', '81', '1', '53', 'chr8.1_051569772|RefMatch_0042', '81', '1', '53', '53', '65', '98.113', '5.21e-22']
+# Update this query: ['chr8.1_051569772|RefMatch_tmp_0002', '81', '1', '52', 'chr8.1_051569772|RefMatch_0016', '81', '1', '52', '52', '99', '100.000', '8.45e-24']
+# With this one: ['chr8.1_051569772|RefMatch_tmp_0002', '81', '1', '53', 'chr8.1_051569772|RefMatch_0042', '81', '1', '53', '53', '65', '98.113', '5.21e-22']
+# Update this query: ['chr2.1_043489993|RefMatch_tmp_0002', '81', '1', '49', 'chr2.1_043489993|RefMatch_0017', '69', '1', '49', '49', '100', '100.000', '5.21e-22']
+# With this one: ['chr2.1_043489993|RefMatch_tmp_0002', '81', '1', '50', 'chr2.1_043489993|RefMatch_0009', '81', '1', '50', '50', '99', '98.000', '3.22e-20']
+  # Number of queries written out:  3423
+100% coverage, but <90% identity ['chr7.1_006496412|AltMatch_tmp_0001', '78', '1', '78', 'chr7.1_006496412|AltMatch_0001', '81', '1', '70', '78', '100', '88.462', '1.25e-19']
+
+## 2024-07-19, 09:33:30
+## Analyze BLAST results of the RefMatch and AltMatch alleles in this report:
+  # Alleles from DArTag reports are different lengths
+  * Number of RefMatch and AltMatch alleles with fixed ID assigned:  3352
+    - Number of RefMatch and AltMatch alleles already existing in the database:  3331
+    - Number of NEW alleles found in this report:  21
+  * Number of alleles discarded because of low BLAST sequence coverage/identity:  71
+
+## Number of RefMatch and AltMatch alleles having the same sequences:
+  * Number of RefMatch and AltMatch alleles aligned to the same alleles in the database:  0
+  * Number of RefMatch and AltMatch alleles after COMBINING those with the same sequences:  0
+
+## Assign fixed allele IDs to RefMatch and AltMatch alleles in this report:
+  * Number of RefMatch and AltMatch alleles assigned fixed IDs:  3352
+  * Number of RefMatch and AltMatch alleles discarded because of low coverage/identity or same sequences:  80 
+
+
+
+## Update allele COUNT database with new allele counts for RefMatch and AltMatch:
+  * Existing allele COUNT database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v034_matchCnt_lut.txt
+  * Updated allele COUNT database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035_matchCnt_lut.txt
+
+## Update allele SEQUENCE database (FASTA) with new RefMatch and AltMatch alleles:
+  * Existing allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v034.fa
+    - Number of allele sequences in existing database:  29388
+  * Updated allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa
+    - Number of allele sequences in the updated database:  29409
+
+#  6). Make BLAST DB
+
+# New version of db created after adding noval alleles./Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa
+
+
+Building a new DB, current time: 07/19/2024 09:33:31
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 29409 sequences in 0.508828 seconds.
+
+
+
+#  7). Do a self BLAST of the db to check if there are duplicate alleles
+
+#  8). Retain only one allele of the duplicated ones
+# Running: get_duplicate_alleles(blast): /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa.self.bn
+# Number of duplicate allele pairs:  0
+# No duplicate microhaplotypes in current db: /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa.self.bn
+
+#  9). Update MADC after removing duplicated alleles in db
+
+# No duplicate alleles found in microhap db
+/Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v035.fa
+/Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v036.fa exists.
+
+
+Building a new DB, current time: 07/19/2024 09:34:05
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v036.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v036.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v036.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 31262 sequences in 0.497376 seconds.
+
+

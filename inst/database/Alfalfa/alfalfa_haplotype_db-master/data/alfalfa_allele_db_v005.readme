@@ -1,0 +1,29 @@
+## 2022-10-05, 11:34:13
+# DArTag report with alleles assigned temporary names: /Users/dz359/PycharmProjects/BI/alfalfa_16plates/data/DAl21-6679_Counts_missing_allele_discovery_plates1to8_snpID_tmp_rename_updated.csv
+# Counts of RefMatch and AltMatch: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v004_matchCnt_lut.txt
+# Current fasta db containing existing alleles: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v004.fa
+
+## Analyze BLAST results of the RefMatch and AltMatch alleles in this report:
+  # Alleles from DArTag reports are different lengths (54 and 81 bp), therefore, USE SUBJECT sequence coverage to determine if a new allele should be retained or not.
+  * Number of RefMatch and AltMatch alleles with fixed ID assigned: 3360
+    - Number of RefMatch and AltMatch alleles already existing in the database: 2241
+    - Number of NEW RefMatch and AltMatch alleles found in this report: 1119
+  * Number of RefMatch and AltMatch alleles discarded because of low BLAST sequence coverage/identity: 54
+
+## Number of RefMatch and AltMatch alleles having the same sequences:
+  * Number of RefMatch and AltMatch alleles aligned to the same alleles in the database: 	0
+  * Number of RefMatch and AltMatch alleles after COMBINING those with the same sequences: 	0
+
+## Assign fixed allele IDs to RefMatch and AltMatch alleles: /Users/dz359/PycharmProjects/BI/alfalfa_16plates/data/DAl21-6679_Counts_missing_allele_discovery_plates1to8_snpID_tmp_rename_updated.csv
+  * Number of RefMatch and AltMatch alleles assigned fixed IDs: 3360
+  * Number of RefMatch and AltMatch alleles discarded because of low coverage/identity or same sequences: 54
+
+## Update allele COUNT database with new allele counts for RefMatch and AltMatch:
+  * Existing allele COUNT database: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v004_matchCnt_lut.txt
+  * Updated allele COUNT database: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v005_matchCnt_lut.txt
+
+## Update allele SEQUENCE database (FASTA) with new RefMatch and AltMatch alleles:
+  * Existing allele SEQUENCE database: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v004.fa
+    - Number of allele sequences in existing database: 11002
+  * Updated allele SEQUENCE database: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v005.fa
+    - Number of allele sequences in the updated database: 12121

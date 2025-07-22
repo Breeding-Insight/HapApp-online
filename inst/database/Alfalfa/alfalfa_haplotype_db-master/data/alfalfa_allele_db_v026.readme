@@ -1,0 +1,11 @@
+## 2024-03-21, 14:06:41
+# DArTag report with alleles assigned temporary names: /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P06_Heathcliffe_FallDorm_16plates/data/Report-DAl23-8031/rerun-microhaplotype/DAl23-8031_MADC_snpID_tmp_rename_updatedSeq.csv
+# Counts of RefMatch and AltMatch: /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v025_matchCnt_lut.txt
+# Current fasta db containing existing alleles: /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v025.fa
+
+## Analyze BLAST results of the RefMatch and AltMatch alleles in this report:
+  # Alleles from DArTag reports are different lengths (54 and 81 bp), therefore, USE SUBJECT sequence coverage to determine if a new allele should be retained or not.
+  * Number of RefMatch and AltMatch alleles with fixed ID assigned: 8109
+    - Number of RefMatch and AltMatch alleles already existing in the database: 6598
+    - Number of NEW RefMatch and AltMatch alleles found in this report: 1511
+  * Number of RefMatch and AltMatch alleles discarded because of low BLAST sequence coverage/identity: 230
