@@ -6,7 +6,7 @@
   "description": "database/Alfalfa/alfalfa_haplotype_db-master/data/alfalfa_allele_db_v044.fa",
   "number-of-letters": 2249439,
   "number-of-sequences": 32291,
-  "last-updated": "2025-07-22T11:47:00",
+  "last-updated": "2025-07-22T13:44:00",
   "number-of-volumes": 1,
   "bytes-total": 7990394,
   "bytes-to-cache": 967982,

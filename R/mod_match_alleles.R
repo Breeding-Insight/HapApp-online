@@ -31,7 +31,7 @@ mod_match_alleles_ui <- function(id) {
         div(
           class = "input-panel",
           div(style = "position: relative;",
-              uiOutput(ns("species_image_ui")),
+              #uiOutput(ns("species_image_ui")),
 
               # Grouped Inputs for better organization
               strong("1. Species & Database"),
@@ -54,7 +54,7 @@ mod_match_alleles_ui <- function(id) {
               fileInput(ns("madc_file"), "MADC File (.csv)", accept = c(".csv")),
 
               # Buttons at the bottom
-              div(class = "bottom-buttons",
+              fluidRow(
                   actionButton(ns("run_button"), "Process Files", class = "btn-primary btn-lg btn-run", icon = icon("cogs")),
                   actionButton(ns("results_button"), "View Results", class = "btn-success btn-lg btn-run", icon = icon("folder-open"))
               )
@@ -90,7 +90,6 @@ mod_match_alleles_ui <- function(id) {
 #' @importFrom fs dir_create file_exists path_abs path path_home
 #' @importFrom utils read.csv zip
 #' @importFrom processx run
-#' @importFrom reticulate py_discover_config py_module_available
 #'
 #' @noRd
 mod_match_alleles_server <- function(id) {
@@ -112,26 +111,21 @@ mod_match_alleles_server <- function(id) {
     # --- Helper function for checking dependencies ---
     check_dependencies <- function() {
       missing <- c()
-      # Check for Python
-      python_path <- try(reticulate::py_discover_config(use_environment = "python3-virtualenv-reticulate")$python, silent = TRUE)
-      if (inherits(python_path, "try-error") || !grepl("python3", python_path, ignore.case = TRUE)) {
+
+      # Check for command-line tools by checking the system PATH
+      if (Sys.which("python3") == "") {
         missing <- c(missing, "Python 3")
       }
-
-      # Check for pandas (as a representative python module)
-      if (!reticulate::py_module_available("pandas")) {
-        missing <- c(missing, "Python module: pandas")
-      }
-
-      # Check for cutadapt
       if (Sys.which("cutadapt") == "") {
         missing <- c(missing, "cutadapt")
       }
-
-      # Check for blastn
       if (Sys.which("blastn") == "") {
         missing <- c(missing, "blastn (from NCBI BLAST+ suite)")
       }
+
+      # Note: We are no longer checking for python modules like pandas here,
+      # as it is unreliable across different user environments (e.g. conda).
+      # If a module is missing, the error will appear in the terminal output.
 
       return(missing)
     }
@@ -223,7 +217,6 @@ mod_match_alleles_server <- function(id) {
           tags$ul(lapply(missing_deps, function(x) tags$li(strong(x)))),
           hr(),
           p("Please install them and ensure they are available in your system's PATH before running the application."),
-          p("For Python modules, you can use: ", tags$code("pip install pandas")),
           easyClose = TRUE, footer = modalButton("Dismiss")
         ))
         return()
