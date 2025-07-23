@@ -1,0 +1,95 @@
+## 2023-06-01, 13:38:51
+
+## Processing  /Users/dz359/PycharmProjects/BI/alfalfa_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID.csv
+  # Only extract RefMatch and AltMatch alleles for determining allele identity and assigning existing IDs or new IDs
+    * Number of RefMatch and AltMatch alleles DISCARDED (>=95% of samples with NO reads):  14635
+    * Number of RefMatch and AltMatch alleles RETAINED (<95% samples with NO reads):  6904
+
+
+Building a new DB, current time: 06/01/2023 13:38:54
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID_match_cutadapt.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID_match_cutadapt.fa
+Sequence type: Nucleotide
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 6898 sequences in 0.136912 seconds.
+
+
+Running: get_duplicate_alleles_lists(blast):
+Number of duplicate allele lists:  171
+
+Running get_longest_alleles(dup_alleles_lists):
+Number of unique alleles after concatenating duplicate alleles:  171
+Number of duplicate alleles that need to be removed:  220
+
+Running concat_duplicate_allele_readCount(tmp_rename_report, dup_alleles_lists_noLength, longest_alleles_list)
+Number of alleles in the original report: 12904
+Number of unique alleles out of the duplicated ones: 171
+
+Running remove_duplicate_alleles_in_cutadapt_fasta(cutadapt_fasta, longest_alleles, remove_alleles):
+Number of alleles in the original fasta file:  6898
+Number of duplicate alleles removed:  220
+
+## Processing /Users/dz359/PycharmProjects/BI/alfalfa_P12_Ali_lowPh_4plates/data/DAl23-8202_MADC_snpID_tmp_rename_updatedSeq.csv
+
+## Creating /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v016.readme
+Update this query: 
+ ['chr7.1_045536518|RefMatch_tmp_0006', '66', '1', '66', 'chr7.1_045536518|RefMatch_0005', '81', '1', '70', '70', '100', '91.429', '7.15e-20'] 
+ ['chr7.1_045536518|RefMatch_tmp_0006', '66', '1', '66', 'chr7.1_045536518|RefMatch_0004', '81', '1', '70', '70', '100', '92.857', '2.83e-19']
+Update this query: 
+ ['chr1.1_017863839|RefMatch_tmp_0001', '70', '1', '70', 'chr1.1_017863839|RefMatch_0012', '70', '1', '70', '70', '100', '91.429', '1.95e-20'] 
+ ['chr1.1_017863839|RefMatch_tmp_0001', '70', '1', '70', 'chr1.1_017863839|Ref_0001', '81', '1', '70', '71', '100', '92.958', '1.20e-18']
+  # Number of queries written out:  6678
+100% coverage, but <90% identity ['chr4.1_047838711|RefMatch_tmp_0001', '70', '1', '70', 'chr4.1_047838711|Ref_0001', '81', '1', '70', '70', '100', '88.571', '1.16e-15']
+100% coverage, but <90% identity ['chr4.1_085591844|RefMatch_tmp_0001', '76', '1', '76', 'chr4.1_085591844|RefMatch_0006', '70', '1', '70', '76', '100', '86.842', '5.05e-15']
+100% coverage, but <90% identity ['chr6.1_034756647|RefMatch_tmp_0002', '81', '1', '81', 'chr6.1_034756647|AltMatch_0008', '81', '1', '81', '81', '100', '88.889', '9.18e-20']
+100% coverage, but <90% identity ['chr7.1_006496412|AltMatch_tmp_0001', '78', '1', '78', 'chr7.1_006496412|Alt_0002', '81', '1', '70', '78', '100', '89.744', '3.60e-22']
+100% coverage, but <90% identity ['chr7.1_016949461|AltMatch_tmp_0001', '76', '1', '76', 'chr7.1_016949461|Alt_0002', '81', '1', '70', '76', '100', '89.474', '8.50e-20']
+100% coverage, but <90% identity ['chr1.1_007050147|AltMatch_tmp_0001', '81', '1', '81', 'chr1.1_007050147|Ref_0001', '81', '1', '70', '81', '100', '86.420', '1.43e-18']
+100% coverage, but <90% identity ['chr3.1_002587746|AltMatch_tmp_0003', '77', '1', '77', 'chr3.1_002587746|AltMatch_0002', '81', '1', '70', '77', '100', '88.312', '1.35e-18']
+100% coverage, but <90% identity ['chr3.1_002587746|AltMatch_tmp_0004', '77', '1', '77', 'chr3.1_002587746|AltMatch_0002', '81', '1', '70', '77', '100', '89.610', '5.53e-21']
+100% coverage, but <90% identity ['chr3.1_018689569|RefMatch_tmp_0002', '62', '1', '62', 'chr3.1_018689569|Ref_0001', '81', '1', '70', '70', '100', '88.571', '1.61e-17']
+
+## 2023-06-01, 13:39:09
+## Analyze BLAST results of the RefMatch and AltMatch alleles in this report:
+  # Alleles from DArTag reports are different lengths
+  * Number of RefMatch and AltMatch alleles with fixed ID assigned:  6571
+    - Number of RefMatch and AltMatch alleles already existing in the database:  4753
+    - Number of NEW alleles found in this report:  1818
+  * Number of alleles discarded because of low BLAST sequence coverage/identity:  107
+
+## Number of RefMatch and AltMatch alleles having the same sequences:
+  * Number of RefMatch and AltMatch alleles aligned to the same alleles in the database:  0
+  * Number of RefMatch and AltMatch alleles after COMBINING those with the same sequences:  0
+
+## Assign fixed allele IDs to RefMatch and AltMatch alleles in this report:
+  * Number of RefMatch and AltMatch alleles assigned fixed IDs:  6571
+  * Number of RefMatch and AltMatch alleles discarded because of low coverage/identity or same sequences:  113
+
+## Update allele COUNT database with new allele counts for RefMatch and AltMatch:
+  * Existing allele COUNT database:  /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v015_matchCnt_lut.txt
+  * Updated allele COUNT database:  /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v016_matchCnt_lut.txt
+
+## Update allele SEQUENCE database (FASTA) with new RefMatch and AltMatch alleles:
+  * Existing allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v015.fa
+    - Number of allele sequences in existing database:  21651
+  * Updated allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v016.fa
+    - Number of allele sequences in the updated database:  23469
+
+
+Building a new DB, current time: 06/01/2023 13:39:09
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v016.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v016.fa
+Sequence type: Nucleotide
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 23469 sequences in 0.447595 seconds.
+
+
+Check this record:  ['chr5.1_058642180|AltMatch_0001', '78', '1', '47', 'chr5.1_058642180|Alt_0002', '81', '1', '47', '47', '100', '100.000', '6.05e-21']
+Check this record:  ['chr5.1_058642180|RefMatch_0001', '66', '1', '43', 'chr5.1_058642180|AltMatch_0001', '78', '1', '43', '43', '100', '100.000', '1.20e-18']
+Check this record:  ['chr5.1_058642180|RefMatch_0001', '66', '35', '66', 'chr5.1_058642180|AltMatch_0001', '78', '47', '78', '32', '100', '100.000', '4.41e-12']
+Check this record:  ['chr8.1_036273494|Alt_0002', '81', '54', '75', 'chr8.1_036273494|Ref_0001', '81', '75', '54', '22', '100', '100.000', '5.25e-06']
+Check this record:  ['chr8.1_036273494|Ref_0001', '81', '54', '75', 'chr8.1_036273494|Alt_0002', '81', '75', '54', '22', '100', '100.000', '5.25e-06']
+Running: get_duplicate_alleles(blast):
+Number of duplicate allele pairs:  0

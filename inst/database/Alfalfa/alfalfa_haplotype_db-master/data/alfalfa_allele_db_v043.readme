@@ -1,0 +1,17 @@
+## 2024.11.18
+## This is a copy of alfalfa_allele_db_v042_ActualAmpliconSeq.fa
+
+  * Updated allele SEQUENCE database:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v042.fa
+    - Number of allele sequences in the updated database:  32204
+
+
+
+$ makeblastdb -in /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v043.fa -dbtype nucl
+
+Building a new DB, current time: 11/18/2024 16:00:38
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v043.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v043.fa
+Sequence type: Nucleotide
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 32206 sequences in 0.527513 seconds.

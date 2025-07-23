@@ -1,0 +1,71 @@
+  # Only extract RefMatch and AltMatch alleles for determining allele identity and assigning existing IDs or new IDs
+    # Retain a RefMatch or AltMatch based on whichever is smaller below:
+      * At least 10 samples, each having a minimum of 2 reads
+      * At least 5% samples, each having a minimum of 2 reads
+
+      * Number of RefMatch and AltMatch alleles DISCARDED:  13895
+      * Number of RefMatch and AltMatch alleles RETAINED:  5175
+
+
+Building a new DB, current time: 07/09/2024 16:22:14
+New DB name:   /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P08_Debby_RootArch_24plates/data/DAl23-7788_MADC_snpID_match_cutadapt.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P08_Debby_RootArch_24plates/data/DAl23-7788_MADC_snpID_match_cutadapt.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P08_Debby_RootArch_24plates/data/DAl23-7788_MADC_snpID_match_cutadapt.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 5167 sequences in 0.0831451 seconds.
+
+
+Running: get_duplicate_alleles_lists(blast):
+Number of duplicate allele lists: 151
+Number of duplicate allele lists after merging lists with comment haps: 151
+
+Running get_longest_alleles(dup_alleles_lists):
+Number of unique alleles after concatenating duplicate alleles:  151
+Number of duplicate alleles that need to be removed:  206
+
+Running concat_duplicate_allele_readCount(tmp_rename_report, dup_alleles_lists_noLength, longest_alleles_list)
+Number of alleles in the original report: 11175
+Number of unique alleles out of the duplicated ones: 151
+
+Running remove_duplicate_alleles_in_cutadapt_fasta(cutadapt_fasta, longest_alleles, remove_alleles):
+Number of alleles in the original fasta file:  5167
+Number of duplicate alleles removed:  206
+
+## Processing /Users/dz359/PycharmProjects/BI/alfalfa_dartag_P08_Debby_RootArch_24plates/data/DAl23-7788_MADC_snpID_tmp_rename_updatedSeq.csv
+
+## Creating /Users/dz359/PycharmProjects/BI/alfalfa_dartag_00_microhaplotype_db/data/alfalfa_allele_db_v039.readme
+# Update this query: ['chr4.1_074846334|RefMatch_tmp_0007', '81', '1', '67', 'chr4.1_074846334|RefMatch_0016', '67', '1', '67', '67', '83', '100.000', '1.01e-32']
+# With this one: ['chr4.1_074846334|RefMatch_tmp_0007', '81', '1', '68', 'chr4.1_074846334|RefMatch_0007', '81', '1', '68', '68', '84', '98.529', '6.22e-31']
+# Update this query: ['chr4.1_079690999|RefMatch_tmp_0015', '81', '1', '63', 'chr4.1_079690999|RefMatch_0010', '63', '1', '63', '63', '78', '100.000', '2.46e-30']
+# With this one: ['chr4.1_079690999|RefMatch_tmp_0015', '81', '1', '64', 'chr4.1_079690999|RefMatch_0004', '81', '1', '64', '64', '79', '96.875', '3.70e-26']
+# Update this query: ['chr6.1_067956726|AltMatch_tmp_0001', '70', '1', '70', 'chr6.1_067956726|AltMatch_0008', '70', '1', '70', '70', '100', '88.571', '1.76e-15']
+# With this one: ['chr6.1_067956726|AltMatch_tmp_0001', '70', '1', '70', 'chr6.1_067956726|AltMatch_0006', '70', '1', '70', '71', '100', '88.732', '2.65e-11']
+# Update this query: ['chr3.1_022654519|RefMatch_tmp_0001', '81', '1', '49', 'chr3.1_022654519|RefMatch_0009', '81', '1', '49', '49', '60', '100.000', '5.56e-22']
+# With this one: ['chr3.1_022654519|RefMatch_tmp_0001', '81', '1', '63', 'chr3.1_022654519|RefMatch_0027', '81', '1', '63', '63', '78', '93.651', '8.68e-21']
+  # Number of queries written out:  4919
+100% coverage, but <90% identity ['chr6.1_067956726|AltMatch_tmp_0001', '70', '1', '70', 'chr6.1_067956726|AltMatch_0006', '70', '1', '70', '71', '100', '88.732', '2.65e-11']
+100% coverage, but <90% identity ['chr7.1_006496412|AltMatch_tmp_0001', '78', '1', '78', 'chr7.1_006496412|AltMatch_0001', '81', '1', '70', '78', '100', '88.462', '1.29e-19']
+100% coverage, but <90% identity ['chr2.1_067882260|AltMatch_tmp_0001', '78', '1', '78', 'chr2.1_067882260|AltMatch_0001', '81', '1', '70', '78', '100', '88.462', '1.29e-19']
+100% coverage, but <90% identity ['chr3.1_057149346|AltMatch_tmp_0002', '78', '1', '78', 'chr3.1_057149346|AltMatch_0001', '81', '1', '70', '78', '100', '89.744', '5.31e-22']
+
+## 2024-07-09, 16:23:12
+## Analyze BLAST results of the RefMatch and AltMatch alleles in this report:
+  # Alleles from DArTag reports are different lengths
+  * Number of RefMatch and AltMatch alleles with fixed ID assigned:  4813
+    - Number of RefMatch and AltMatch alleles already existing in the database:  4813
+    - Number of NEW alleles found in this report:  0
+  * Number of alleles discarded because of low BLAST sequence coverage/identity:  106
+
+## Number of RefMatch and AltMatch alleles having the same sequences:
+  * Number of RefMatch and AltMatch alleles aligned to the same alleles in the database:  0
+  * Number of RefMatch and AltMatch alleles after COMBINING those with the same sequences:  0
+
+## Assign fixed allele IDs to RefMatch and AltMatch alleles in this report:
+  * Number of RefMatch and AltMatch alleles assigned fixed IDs:  4813
+  * Number of RefMatch and AltMatch alleles discarded because of low coverage/identity or same sequences:  156 
+
+
+# No new alleles found in this project
+

@@ -1,0 +1,49 @@
+Number of fasta sequences written out:  5412
+
+
+Building a new DB, current time: 04/08/2024 14:10:51
+New DB name:   /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 5412 sequences in 0.106356 seconds.
+
+
+# Running db05_determine_alleleOri_from_blast_AND_update_f180bp.py on /Users/dz359/PycharmProjects/BI/cranberry_dartag_P00_validation/data/DCran23-8178_MADC_rmDupTags_snpID_ref_alt_amplicons.fa.f180bp.bn
+Number of Ref and Alt alleles:  5412
+# Number of alleles on PLUS strand:  2504
+# Number of alleles on MINUS strand:  2908
+
+
+Building a new DB, current time: 04/08/2024 14:10:57
+New DB name:   /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp_rev.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp_rev.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp_rev.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 5412 sequences in 0.1049 seconds.
+
+
+# Running db07_generate_ref_alt_sfetch_keys_from_blast.py on /Users/dz359/PycharmProjects/BI/cranberry_dartag_P00_validation/data/DCran23-8178_MADC_rmDupTags_snpID_ref_alt_amplicons.fa.f180bp_rev.bn
+# Extract unique hits for queries
+    # Number of ref blast_unique:  2706
+    # Number of alt blast_unique:  2706
+# Total records written out:  5412
+Creating SSI index for /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp_rev.fa...    done.
+Indexed 5412 sequences (5412 names).
+SSI index written to file /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/f180bp/Cranberry_unique_alignment_126MAS_3K_54BB_rmDupTags_f180bp_rev.fa.ssi
+
+
+Building a new DB, current time: 04/08/2024 14:11:03
+New DB name:   /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/cranberry_allele_db_v001.fa
+New DB title:  /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/cranberry_allele_db_v001.fa
+Sequence type: Nucleotide
+Deleted existing Nucleotide BLAST database named /Users/dz359/PycharmProjects/BI/cranberry_dartag_00_microhaplotype_db/data/cranberry_allele_db_v001.fa
+Keep MBits: T
+Maximum file size: 1000000000B
+Adding sequences from FASTA; added 5412 sequences in 0.106111 seconds.
+
+
