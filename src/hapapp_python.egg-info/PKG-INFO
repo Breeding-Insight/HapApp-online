@@ -1,3 +1,16 @@
+Metadata-Version: 2.4
+Name: hapapp-python
+Version: 0.1.0
+Summary: Dash interface for HapApp microhaplotype assignment and core DB workflows
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: biopython
+Requires-Dist: cutadapt
+Requires-Dist: dash
+Requires-Dist: dash-bootstrap-components
+Requires-Dist: dash-uploader<0.7,>=0.6.1
+Requires-Dist: pandas
+
 # HapApp Python
 
 Dash interface for HapApp microhaplotype workflows. The project vendors a snapshot of `HapApp_utils` in `vendor/HapApp_utils`, so the app does not depend on a sibling utility checkout at runtime.

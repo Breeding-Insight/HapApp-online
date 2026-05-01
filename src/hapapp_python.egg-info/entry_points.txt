@@ -1,0 +1,2 @@
+[console_scripts]
+hapapp-python = hapapp_python.app:main

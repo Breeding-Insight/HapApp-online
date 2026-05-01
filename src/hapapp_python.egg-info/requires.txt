@@ -1,0 +1,6 @@
+biopython
+cutadapt
+dash
+dash-bootstrap-components
+dash-uploader<0.7,>=0.6.1
+pandas

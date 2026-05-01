@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hapapp-python"
+version = "0.1.0"
+description = "Dash interface for HapApp microhaplotype assignment and core DB workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "biopython",
+  "cutadapt",
+  "dash",
+  "dash-bootstrap-components",
+  "dash-uploader>=0.6.1,<0.7",
+  "pandas",
+]
+
+[project.scripts]
+hapapp-python = "hapapp_python.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hapapp_python = ["py.typed"]

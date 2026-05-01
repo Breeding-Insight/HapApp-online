@@ -1,0 +1,6 @@
+include README.md
+include pixi.toml
+recursive-include assets *
+recursive-include workflows *
+recursive-include vendor/HapApp_utils *
+global-exclude __pycache__ *.py[cod] .DS_Store

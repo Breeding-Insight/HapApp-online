@@ -1,8 +1,0 @@
-## 2023-05-23, 15:00:17
-Remove duplicate alleles and only keep one unique sequence
-
-Input db fasta: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v012.fa
-Output db fasta: /Users/dz359/PycharmProjects/BI/alfalfa_haplotype_db/data/alfalfa_allele_db_v013.fa
-Number of duplicate alleles removed: 1
-Number of alleles in the input db fasta file: 20113
-Number of alleles in the output db fasta file: 20112
