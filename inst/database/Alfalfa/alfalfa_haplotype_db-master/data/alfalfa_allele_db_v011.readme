@@ -1,8 +1,0 @@
-## 2023-03-04, 01:47:23
-Remove duplicate alleles and only keep one unique sequence
-
-Input db fasta: /workdir/ml2498/Alfalfa/alfalfa_haplotype_db/data/alfalfa_allele_db_v010.fa
-Output db fasta: /workdir/ml2498/Alfalfa/alfalfa_haplotype_db/data/alfalfa_allele_db_v011.fa
-Number of duplicate alleles removed: 3
-Number of alleles in the input db fasta file: 19410
-Number of alleles in the output db fasta file: 19407
