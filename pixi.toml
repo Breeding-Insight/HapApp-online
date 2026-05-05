@@ -1,5 +1,5 @@
 [project]
-name = "hapapp-python"
+name = "hapapp-local"
 version = "0.1.0"
 description = "Dash interface for HapApp microhaplotype workflows"
 channels = ["conda-forge", "bioconda"]
@@ -13,7 +13,7 @@ seqkit = "*"
 mmseqs2 = "*"
 
 [pypi-dependencies]
-hapapp-python = { path = ".", editable = true }
+hapapp-local = { path = ".", editable = true }
 biopython = "*"
 cutadapt = "*"
 dash = "*"
@@ -22,4 +22,4 @@ pandas = "*"
 dash-uploader = ">=0.6.1, <0.7"
 
 [tasks]
-hapapp-python = "hapapp-python"
+hapapp-local = "hapapp-local"

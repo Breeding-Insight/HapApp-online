@@ -33,10 +33,27 @@ body {
   margin-bottom: 14px;
 }
 
+.app-title-line {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
 .app-title h1 {
   font-size: 25px;
   font-weight: 700;
   margin: 0;
+}
+
+.app-version {
+  background: #edf2f7;
+  border: 1px solid #d6dee8;
+  border-radius: 4px;
+  color: #415163;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 7px;
 }
 
 .app-title p {
@@ -129,6 +146,7 @@ body {
 }
 
 .upload-wrap > div {
+  padding: 0 !important;
   transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
@@ -155,12 +173,17 @@ body {
 }
 
 .upload-wrap label {
+  align-items: center;
+  cursor: pointer;
+  display: flex !important;
+  min-height: 35px;
   overflow: hidden !important;
   overflow-wrap: normal !important;
-  padding-right: 0 !important;
+  padding: 7px 9px !important;
   text-align: left !important;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
 }
 
 .upload-wrap .progress {
@@ -179,26 +202,6 @@ body {
   font-size: 10px;
   font-weight: 700;
   line-height: 14px;
-}
-
-.section-toggle {
-  align-items: center;
-  background: #ffffff !important;
-  border-color: #9aa8b5 !important;
-  color: #263746 !important;
-  display: flex;
-  font-weight: 700;
-  justify-content: flex-start;
-  margin: 4px 0 9px;
-  padding: 6px 9px;
-  width: 100%;
-}
-
-.section-toggle:hover,
-.section-toggle:focus {
-  background: #f1f6f6 !important;
-  border-color: var(--accent) !important;
-  color: #123f3c !important;
 }
 
 .run-button {

@@ -20,6 +20,8 @@ import dash_bootstrap_components as dbc
 import dash_uploader as du
 from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_update
 
+from . import __version__
+
 
 def _find_project_root() -> Path:
     editable_root = Path(__file__).resolve().parents[2]
@@ -40,7 +42,7 @@ MADC_WORKFLOW = WORKFLOWS_DIR / "build02_madc_haps.sh"
 CORE_WORKFLOW = WORKFLOWS_DIR / "build01_ref_alt_core_db.sh"
 MADC_SCRIPTS_DIR = VENDOR_UTILS_DIR / "scripts" / "RefMatch_AltMatch_Other"
 CORE_SCRIPTS_DIR = VENDOR_UTILS_DIR / "scripts" / "refAlt_coreDB"
-RUN_BASE = Path(tempfile.gettempdir()) / "hapapp_python_runs"
+RUN_BASE = Path(tempfile.gettempdir()) / "hapapp_local_runs"
 UPLOAD_BASE = RUN_BASE / "uploads"
 MAX_UPLOAD_MB = 50 * 1024
 UPLOAD_CHUNK_MB = 16
@@ -48,6 +50,7 @@ MADC_PREVIEW_EMPTY_MESSAGE = "Upload an MADC file to display a preview."
 MADC_CORE_RESULT_PATTERN = re.compile(
     r"_snpID_rename_updatedSeq\.csv$|_snpID_rename\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
 )
+APP_NAME = "HapApp"
 
 
 @dataclass
@@ -348,7 +351,7 @@ def _split_madc_result_options(state: RunState | None) -> tuple[list[dict[str, s
 
     for file_path in state.files:
         option = {"label": file_path, "value": file_path}
-        if MADC_CORE_RESULT_PATTERN.search(file_path):
+        if "/" not in file_path and MADC_CORE_RESULT_PATTERN.search(file_path):
             core_files.append(option)
         else:
             diagnostic_files.append(option)
@@ -569,30 +572,6 @@ def _madc_tab() -> html.Div:
                                 _uploader_box("madc-snpid-lut-upload", "SNP ID LUT (.csv)", ["csv", "txt", "tsv"]),
                                 _uploader_box("madc-base-db-upload", "Base allele DB FASTA", ["fa", "fasta", "fna"]),
                                 _uploader_box("madc-base-matchcnt-upload", "Base match-count LUT", ["txt", "csv", "tsv"]),
-                                dbc.Button(
-                                    "Optional inputs",
-                                    id="madc-optional-toggle",
-                                    color="secondary",
-                                    outline=True,
-                                    className="section-toggle",
-                                ),
-                                dbc.Collapse(
-                                    [
-                                        _uploader_box(
-                                            "madc-indel-db-upload",
-                                            "Indel-added DB FASTA",
-                                            ["fa", "fasta", "fna"],
-                                        ),
-                                        _uploader_box(
-                                            "madc-indel-matchcnt-upload",
-                                            "Indel-added match-count LUT",
-                                            ["txt", "csv", "tsv"],
-                                        ),
-                                        _uploader_box("madc-dup-tags-upload", "Duplicate-tags file", ["txt", "csv", "tsv"]),
-                                    ],
-                                    id="madc-optional-collapse",
-                                    is_open=False,
-                                ),
                                 html.H3("Parameters"),
                                 dbc.Row(
                                     [
@@ -746,7 +725,7 @@ def create_app() -> Dash:
         external_stylesheets=[dbc.themes.FLATLY],
         assets_folder=str(PROJECT_ROOT / "assets"),
         suppress_callback_exceptions=True,
-        title="HapApp Python",
+        title=APP_NAME,
     )
     du.configure_upload(app, str(UPLOAD_BASE))
 
@@ -763,7 +742,13 @@ def create_app() -> Dash:
                 [
                     html.Div(
                         [
-                            html.H1("HapApp Python"),
+                            html.Div(
+                                [
+                                    html.H1(APP_NAME),
+                                    html.Span(f"v{__version__}", className="app-version"),
+                                ],
+                                className="app-title-line",
+                            ),
                             html.P("Microhaplotype assignment and Ref/Alt database workflows"),
                         ],
                         className="app-title",
@@ -891,16 +876,6 @@ def register_callbacks(app: Dash) -> None:
         )
 
     @app.callback(
-        Output("madc-optional-collapse", "is_open"),
-        Input("madc-optional-toggle", "n_clicks"),
-        State("madc-optional-collapse", "is_open"),
-    )
-    def toggle_madc_optional(n_clicks, is_open):
-        if n_clicks:
-            return not is_open
-        return is_open
-
-    @app.callback(
         Output("madc-preview-table", "columns"),
         Output("madc-preview-table", "data"),
         Output("madc-preview-message", "children"),
@@ -945,15 +920,6 @@ def register_callbacks(app: Dash) -> None:
         State("madc-base-matchcnt-upload", "fileNames"),
         State("madc-base-matchcnt-upload", "upload_id"),
         State("madc-base-matchcnt-upload", "isCompleted"),
-        State("madc-indel-db-upload", "fileNames"),
-        State("madc-indel-db-upload", "upload_id"),
-        State("madc-indel-db-upload", "isCompleted"),
-        State("madc-indel-matchcnt-upload", "fileNames"),
-        State("madc-indel-matchcnt-upload", "upload_id"),
-        State("madc-indel-matchcnt-upload", "isCompleted"),
-        State("madc-dup-tags-upload", "fileNames"),
-        State("madc-dup-tags-upload", "upload_id"),
-        State("madc-dup-tags-upload", "isCompleted"),
         State("madc-first-sample-col", "value"),
         State("madc-design-len", "value"),
         State("madc-seq-len", "value"),
@@ -975,15 +941,6 @@ def register_callbacks(app: Dash) -> None:
         base_matchcnt_files,
         base_matchcnt_upload_id,
         base_matchcnt_completed,
-        indel_db_files,
-        indel_db_upload_id,
-        indel_db_completed,
-        indel_matchcnt_files,
-        indel_matchcnt_upload_id,
-        indel_matchcnt_completed,
-        dup_tags_files,
-        dup_tags_upload_id,
-        dup_tags_completed,
         first_sample_col,
         design_len,
         seq_len,
@@ -1004,11 +961,6 @@ def register_callbacks(app: Dash) -> None:
             missing = _missing_commands(required_commands)
             if missing:
                 raise ValueError("Missing required commands: " + ", ".join(missing))
-
-            has_indel_db = bool(_normalize_file_list(indel_db_files))
-            has_indel_matchcnt = bool(_normalize_file_list(indel_matchcnt_files))
-            if has_indel_db != has_indel_matchcnt:
-                raise ValueError("Provide both indel-added DB FASTA and indel-added match-count LUT, or neither")
 
             run_root = RUN_BASE / "madc" / uuid.uuid4().hex
             work_dir = run_root / "work"
@@ -1031,38 +983,9 @@ def register_callbacks(app: Dash) -> None:
                 "Base match-count LUT",
                 "base_matchcnt_lut.txt",
             )
-            indel_db = _stage_uploaded_file(
-                indel_db_files,
-                indel_db_upload_id,
-                indel_db_completed,
-                work_dir,
-                "Indel-added DB FASTA",
-                "indel_allele_db.fa",
-                required=False,
-            )
-            indel_matchcnt = _stage_uploaded_file(
-                indel_matchcnt_files,
-                indel_matchcnt_upload_id,
-                indel_matchcnt_completed,
-                work_dir,
-                "Indel-added match-count LUT",
-                "indel_matchcnt_lut.txt",
-                required=False,
-            )
-            dup_tags = _stage_uploaded_file(
-                dup_tags_files,
-                dup_tags_upload_id,
-                dup_tags_completed,
-                work_dir,
-                "Duplicate-tags file",
-                "duplicate_tags.txt",
-                required=False,
-            )
 
             assert report and snpid and base_db and base_matchcnt
             input_files = {path.relative_to(work_dir).as_posix() for path in [report, snpid, base_db, base_matchcnt]}
-            optional_paths = [path for path in [indel_db, indel_matchcnt, dup_tags] if path is not None]
-            input_files.update(path.relative_to(work_dir).as_posix() for path in optional_paths)
 
             command = [
                 "bash",
@@ -1092,10 +1015,6 @@ def register_callbacks(app: Dash) -> None:
                 "--code-ver",
                 code_version,
             ]
-            if indel_db and indel_matchcnt:
-                command.extend(["--allele-db-indel", str(indel_db), "--matchcnt-lut-indel", str(indel_matchcnt)])
-            if dup_tags:
-                command.extend(["--dup-tags", str(dup_tags)])
 
             run_id = _start_run("MADC hap assignment", command, work_dir, input_files)
             return run_id, dbc.Alert("Run started.", color="info", className="run-alert")
@@ -1294,7 +1213,7 @@ def register_callbacks(app: Dash) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the HapApp Python Dash app")
+    parser = argparse.ArgumentParser(description="Run the HapApp Dash app")
     parser.add_argument("--host", default=os.environ.get("HAPAPP_HOST", "127.0.0.1"))
     parser.add_argument("--port", default=int(os.environ.get("HAPAPP_PORT", "8050")), type=int)
     parser.add_argument("--debug", action="store_true", default=os.environ.get("HAPAPP_DEBUG") == "1")
