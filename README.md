@@ -18,6 +18,26 @@ Pixi installs the Python app dependencies plus the command-line bioinformatics t
 - Python/PyPI: `dash`, `dash-bootstrap-components`, `dash-uploader`, `pandas`, `biopython`, `cutadapt`
 - Conda/Bioconda: `blast`, `hmmer` (`esl-sfetch`), `seqkit`, `mmseqs2`
 
+## Docker
+
+Build the image from the repository root:
+
+```bash
+docker build --platform linux/amd64 -t hapapp-python .
+```
+
+Run the app on <http://localhost:8050>:
+
+```bash
+docker run --rm --platform linux/amd64 -p 8050:8050 hapapp-python
+```
+
+The image uses the checked-in `pixi.lock` file and serves Dash on `0.0.0.0:8050`. Workflow uploads and run outputs are stored under `/tmp/hapapp_python_runs` inside the container. To keep those files after the container exits, mount a volume:
+
+```bash
+docker run --rm --platform linux/amd64 -p 8050:8050 -v hapapp-runs:/tmp/hapapp_python_runs hapapp-python
+```
+
 ## Workflows
 
 The app has two tabs.
