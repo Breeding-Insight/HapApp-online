@@ -989,9 +989,9 @@ packages:
   size: 2734398
   timestamp: 1626369562748
 - pypi: ./
-  name: hapapp-python
+  name: hapapp-local
   version: 0.1.0
-  sha256: 60dd5b90ef4a8860f773ed52930e12248b681e347731418405c0896aa5523e6a
+  sha256: 0fe8ed65331eaf6eacd5939d6ea5d50bce45bb0341160394ce9926a12b95a220
   requires_dist:
   - biopython
   - cutadapt
