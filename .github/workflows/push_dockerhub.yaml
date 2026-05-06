@@ -1,8 +1,8 @@
 name: Build & Push Docker image on package version change
 
 on:
-  push:
-    branches: [ define_branch ]
+  release:
+    types: [published]
     paths:
       - .github/workflows/push_dockerhub.yaml
       - Dockerfile
