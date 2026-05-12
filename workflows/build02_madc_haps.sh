@@ -84,8 +84,50 @@ done
 [[ -n "$MATCHCNT_LUT_BASE_PATH" ]] || die "Missing --matchcnt-lut-base"
 
 mkdir -p "$WORK_DIR"
-PROCESS_README="$WORK_DIR/madc_hap_assignment_process.readme"
-NO_NEW_ALLELE_README="$WORK_DIR/madc_hap_assignment_no_new_allele.readme"
+
+require_file "$REPORT" "MADC report"
+require_file "$SNPID_LUT" "SNP ID LUT"
+require_file "$ALLELE_DB_BASE_PATH" "Base allele DB FASTA"
+require_file "$MATCHCNT_LUT_BASE_PATH" "Base match-count LUT"
+[[ -d "$SCRIPTS_DIR" ]] || die "Scripts directory not found: $SCRIPTS_DIR"
+
+if [[ -n "$ALLELE_DB_INDEL_PATH" || -n "$MATCHCNT_LUT_INDEL_PATH" ]]; then
+    [[ -n "$ALLELE_DB_INDEL_PATH" && -n "$MATCHCNT_LUT_INDEL_PATH" ]] || die "Provide both indel DB FASTA and indel match-count LUT, or neither"
+fi
+
+if [[ -n "$ALLELE_DB_INDEL_PATH" && -f "$ALLELE_DB_INDEL_PATH" && -f "$MATCHCNT_LUT_INDEL_PATH" ]]; then
+    ALLELE_DB_PATH="$ALLELE_DB_INDEL_PATH"
+    MATCHCNT_LUT_PATH="$MATCHCNT_LUT_INDEL_PATH"
+else
+    ALLELE_DB_PATH="$ALLELE_DB_BASE_PATH"
+    MATCHCNT_LUT_PATH="$MATCHCNT_LUT_BASE_PATH"
+fi
+
+ALLELE_DB_DIR="$(cd "$(dirname "$ALLELE_DB_PATH")" && pwd -P)"
+ALLELE_DB="$(basename "$ALLELE_DB_PATH")"
+MATCHCNT_LUT="$(basename "$MATCHCNT_LUT_PATH")"
+
+if [[ "$ALLELE_DB" =~ (v[0-9]{3}) ]]; then
+    VER_TOKEN="${BASH_REMATCH[1]}"
+else
+    die "Allele DB filename must contain a version token like v001: $ALLELE_DB"
+fi
+VER=${VER_TOKEN#v}
+VER=$((10#$VER))
+NEW_VER=$(printf '%03d' $((VER + 1)))
+ALLELE_DB_NEW="${ALLELE_DB/$VER_TOKEN/v$NEW_VER}"
+
+case "$ALLELE_DB" in
+    *.fa|*.FA|*.Fa|*.fA|*.fasta|*.FASTA|*.Fasta|*.fna|*.FNA|*.Fna)
+        INPUT_DB_STEM="${ALLELE_DB%.*}"
+        ;;
+    *)
+        INPUT_DB_STEM="$ALLELE_DB"
+        ;;
+esac
+NEXT_DB_STEM="${INPUT_DB_STEM/$VER_TOKEN/v$NEW_VER}"
+PROCESS_README="$WORK_DIR/${NEXT_DB_STEM}_process.readme"
+NO_NEW_ALLELE_README="$WORK_DIR/${INPUT_DB_STEM}_report_noNewAllele.readme"
 : > "$PROCESS_README"
 exec > >(tee -a "$PROCESS_README") 2>&1
 
@@ -96,42 +138,20 @@ if [[ "$SEQ_LEN" -gt "$DESIGN_LEN" ]]; then
     require_command cutadapt
 fi
 
-require_file "$REPORT" "MADC report"
-require_file "$SNPID_LUT" "SNP ID LUT"
-require_file "$ALLELE_DB_BASE_PATH" "Base allele DB FASTA"
-require_file "$MATCHCNT_LUT_BASE_PATH" "Base match-count LUT"
-[[ -d "$SCRIPTS_DIR" ]] || die "Scripts directory not found: $SCRIPTS_DIR"
-
 printf "%s\n" "$(date)"
 printf "\n--- Scripts, files, and parameters used ---\n"
 printf "# Scripts directory: %s\n" "$SCRIPTS_DIR"
 printf "# Working directory: %s\n" "$WORK_DIR"
 printf "# Report: %s\n" "$REPORT"
 printf "# SNP ID LUT: %s\n" "$SNPID_LUT"
+printf "# Allele DB input: %s\n" "$ALLELE_DB_PATH"
+printf "# Match-count LUT input: %s\n" "$MATCHCNT_LUT_PATH"
+printf "# Process README: %s\n" "$PROCESS_README"
+printf "# No-new-allele README: %s\n" "$NO_NEW_ALLELE_README"
 printf "# First sample column: %s\n" "$FIRST_SAMPLE_COL"
 printf "# Panel design length: %s\n" "$DESIGN_LEN"
 printf "# Sequencing length: %s\n" "$SEQ_LEN"
 printf "# BLAST filtering thresholds: %s%% coverage, %s%% identity\n" "$COV" "$IDEN"
-
-if [[ -n "$ALLELE_DB_INDEL_PATH" || -n "$MATCHCNT_LUT_INDEL_PATH" ]]; then
-    [[ -n "$ALLELE_DB_INDEL_PATH" && -n "$MATCHCNT_LUT_INDEL_PATH" ]] || die "Provide both indel DB FASTA and indel match-count LUT, or neither"
-fi
-
-if [[ -n "$ALLELE_DB_INDEL_PATH" && -f "$ALLELE_DB_INDEL_PATH" && -f "$MATCHCNT_LUT_INDEL_PATH" ]]; then
-    ALLELE_DB_PATH="$ALLELE_DB_INDEL_PATH"
-    MATCHCNT_LUT_PATH="$MATCHCNT_LUT_INDEL_PATH"
-    printf "# Allele DB input: %s\n" "$ALLELE_DB_PATH"
-    printf "# Match-count LUT input: %s\n" "$MATCHCNT_LUT_PATH"
-else
-    ALLELE_DB_PATH="$ALLELE_DB_BASE_PATH"
-    MATCHCNT_LUT_PATH="$MATCHCNT_LUT_BASE_PATH"
-    printf "# Allele DB input: %s\n" "$ALLELE_DB_PATH"
-    printf "# Match-count LUT input: %s\n" "$MATCHCNT_LUT_PATH"
-fi
-
-ALLELE_DB_DIR="$(cd "$(dirname "$ALLELE_DB_PATH")" && pwd -P)"
-ALLELE_DB="$(basename "$ALLELE_DB_PATH")"
-MATCHCNT_LUT="$(basename "$MATCHCNT_LUT_PATH")"
 
 printf "\n# 1). Update snpIDs to Chr_00xxxxxxx format in MADC\n"
 python3 "$SCRIPTS_DIR/step00_madc_update_snpID_v1.1.py" "$SNPID_LUT" "$REPORT"
@@ -290,12 +310,6 @@ else
 fi
 
 printf "\n# 10). Check if a new DB version was created\n"
-VER_TOKEN=$(printf '%s\n' "$ALLELE_DB" | grep -oE 'v[0-9]{3}' | head -n 1 || true)
-[[ -n "$VER_TOKEN" ]] || die "Allele DB filename must contain a version token like v001: $ALLELE_DB"
-VER=${VER_TOKEN#v}
-VER=$((10#$VER))
-NEW_VER=$(printf '%03d' $((VER + 1)))
-ALLELE_DB_NEW=$(printf '%s' "$ALLELE_DB" | sed -E "s/v[0-9]{3}/v$NEW_VER/")
 
 if [[ -f "$ALLELE_DB_DIR/$ALLELE_DB_NEW" ]]; then
     printf "  # New version of DB created after adding novel alleles: %s\n" "$ALLELE_DB_DIR/$ALLELE_DB_NEW"
