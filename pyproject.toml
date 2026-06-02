@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hapapp-local"
+name = "hapapp-online"
 version = "0.1.0"
-description = "Dash interface for HapApp microhaplotype assignment and core DB workflows"
+description = "Dash interface for HapApp microhaplotype assignment"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hapapp-local = "hapapp_python.app:main"
+hapapp-online = "hapapp_python.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

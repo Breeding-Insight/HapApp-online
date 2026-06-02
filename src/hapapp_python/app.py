@@ -22,7 +22,7 @@ import dash_bootstrap_components as dbc
 import dash_uploader as du
 from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_update
 
-from hapapp_python.madc_validation import validate_raw_madc
+from hapapp_python.madc_validation import MADCValidationError, validate_raw_madc
 
 from . import __version__
 
@@ -43,15 +43,13 @@ PROJECT_ROOT = _find_project_root()
 WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
 VENDOR_UTILS_DIR = PROJECT_ROOT / "vendor" / "HapApp_utils"
 MADC_WORKFLOW = WORKFLOWS_DIR / "build02_madc_haps.sh"
-CORE_WORKFLOW = WORKFLOWS_DIR / "build01_ref_alt_core_db.sh"
 MADC_SCRIPTS_DIR = VENDOR_UTILS_DIR / "scripts" / "RefMatch_AltMatch_Other"
-CORE_SCRIPTS_DIR = VENDOR_UTILS_DIR / "scripts" / "refAlt_coreDB"
-RUN_BASE = Path(tempfile.gettempdir()) / "hapapp_local_runs"
+RUN_BASE = Path(tempfile.gettempdir()) / "hapapp_online_runs"
 UPLOAD_BASE = RUN_BASE / "uploads"
 MAX_UPLOAD_MB = 50 * 1024
 UPLOAD_CHUNK_MB = 16
 MADC_PREVIEW_EMPTY_MESSAGE = "Upload an MADC file to display a preview."
-MADC_CORE_RESULT_PATTERN = re.compile(
+MADC_MAIN_RESULT_PATTERN = re.compile(
     r"_snpID_rename_updatedSeq\.csv$|_snpID_rename\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
 )
 PANEL_CONFIG_PATH = Path(os.environ.get("HAPAPP_PANELS_FILE", Path(__file__).with_name("panels.toml")))
@@ -181,38 +179,6 @@ def _stage_uploaded_file(
 
 def _missing_commands(commands: Iterable[str]) -> list[str]:
     return [cmd for cmd in commands if shutil.which(cmd) is None]
-
-
-def _positive_int(value: object, label: str) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{label} must be an integer") from exc
-    if parsed <= 0:
-        raise ValueError(f"{label} must be greater than zero")
-    return parsed
-
-
-def _number(value: object, label: str) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{label} must be numeric") from exc
-    if parsed <= 0:
-        raise ValueError(f"{label} must be greater than zero")
-    return parsed
-
-
-def _validate_output_prefix(value: object) -> str:
-    prefix = str(value or "core_allele_db_v001").strip()
-    prefix = prefix[:-3] if prefix.endswith(".fa") else prefix
-    if "/" in prefix or "\\" in prefix:
-        raise ValueError("Output prefix must be a filename prefix, not a path")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", prefix):
-        raise ValueError("Output prefix may contain only letters, numbers, dots, underscores, and dashes")
-    if not re.search(r"v[0-9]{3}", prefix):
-        raise ValueError("Output prefix must contain a version token like v001")
-    return prefix
 
 
 def _load_madc_panels(config_path: Path = PANEL_CONFIG_PATH) -> dict[str, MADCPanel]:
@@ -514,18 +480,18 @@ def _result_options(state: RunState | None) -> list[dict[str, str]]:
 
 
 def _split_madc_result_options(state: RunState | None) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    core_files: list[dict[str, str]] = []
+    main_files: list[dict[str, str]] = []
     diagnostic_files: list[dict[str, str]] = []
     if state is None:
-        return core_files, diagnostic_files
+        return main_files, diagnostic_files
 
     for file_path in state.files:
         option = {"label": file_path, "value": file_path}
-        if "/" not in file_path and MADC_CORE_RESULT_PATTERN.search(file_path):
-            core_files.append(option)
+        if "/" not in file_path and MADC_MAIN_RESULT_PATTERN.search(file_path):
+            main_files.append(option)
         else:
             diagnostic_files.append(option)
-    return core_files, diagnostic_files
+    return main_files, diagnostic_files
 
 
 def _option_values(options: list[dict[str, str]]) -> list[str]:
@@ -633,16 +599,6 @@ def _uploader_box(component_id: str, label: str, filetypes: list[str] | None = N
     )
 
 
-def _number_input(component_id: str, label: str, value: int | float, step: int | float = 1) -> dbc.Col:
-    return dbc.Col(
-        [
-            dbc.Label(label, html_for=component_id),
-            dbc.Input(id=component_id, type="number", value=value, step=step, min=0),
-        ],
-        md=6,
-    )
-
-
 def _madc_results_modal() -> dbc.Modal:
     return dbc.Modal(
         [
@@ -656,9 +612,9 @@ def _madc_results_modal() -> dbc.Modal:
                             [
                                 dbc.Col(
                                     [
-                                        html.H4("Core Files"),
+                                        html.H4("Main Files"),
                                         dcc.Checklist(
-                                            id="madc-core-files",
+                                            id="madc-main-files",
                                             options=[],
                                             value=[],
                                             className="results-checklist",
@@ -699,29 +655,34 @@ def _madc_results_modal() -> dbc.Modal:
     )
 
 
-def _core_results_modal() -> dbc.Modal:
+def _madc_verification_details(exc: MADCValidationError) -> list:
+    details: list = []
+    if exc.errors:
+        details.extend(
+            [
+                html.H5("Errors"),
+                html.Ul([html.Li(error) for error in exc.errors], className="verification-list"),
+            ]
+        )
+    if exc.warnings:
+        details.extend(
+            [
+                html.H5("Warnings"),
+                html.Ul([html.Li(warning) for warning in exc.warnings], className="verification-list"),
+            ]
+        )
+    details.append(html.P("Please contact Breeding Insight for assistance.", className="verification-contact"))
+    return details
+
+
+def _madc_verification_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Core Ref/Alt Results"), close_button=False),
-            dbc.ModalBody(
-                [
-                    html.Div(id="core-results-message", className="results-message"),
-                    dcc.Dropdown(
-                        id="core-results-select",
-                        multi=True,
-                        placeholder="All result files",
-                        className="result-select",
-                    ),
-                ]
-            ),
-            dbc.ModalFooter(
-                [
-                    dbc.Button("Cancel", id="core-results-close", color="secondary", outline=True),
-                    dbc.Button("Download Selected", id="core-download-button", color="success", disabled=True),
-                ]
-            ),
+            dbc.ModalHeader(dbc.ModalTitle("MADC Verification Failed"), close_button=False),
+            dbc.ModalBody(html.Div(id="madc-verification-details", className="verification-details")),
+            dbc.ModalFooter(dbc.Button("Close", id="madc-verification-close", color="secondary", outline=True)),
         ],
-        id="core-results-modal",
+        id="madc-verification-modal",
         centered=True,
         size="lg",
     )
@@ -812,81 +773,9 @@ def _madc_tab() -> html.Div:
                 className="preview-panel",
             ),
             _madc_results_modal(),
+            _madc_verification_modal(),
         ]
     )
-
-
-def _core_tab() -> html.Div:
-    return html.Div(
-        [
-            dbc.Row(
-                [
-                    dbc.Col(
-                        html.Div(
-                            [
-                                html.H2("Core Ref/Alt DB"),
-                                html.Div(id="core-alert", className="alert-slot"),
-                                html.H3("Inputs"),
-                                _uploader_box("core-probe-upload", "Probe design file", ["csv", "txt", "tsv"]),
-                                _uploader_box("core-chr-len-upload", "Chromosome length file", ["txt", "len", "csv", "tsv"]),
-                                _uploader_box("core-madc-upload", "MADC report (.csv)", ["csv", "txt"]),
-                                html.H3("Reference Genome"),
-                                _uploader_box("core-ref-upload", "Reference genome FASTA", ["fa", "fasta", "fna"]),
-                                html.H3("Parameters"),
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            [
-                                                dbc.Label("Output prefix", html_for="core-output-prefix"),
-                                                dbc.Input(
-                                                    id="core-output-prefix",
-                                                    value="core_allele_db_v001",
-                                                    type="text",
-                                                ),
-                                            ],
-                                            md=12,
-                                        ),
-                                        _number_input("core-ref-len", "Ref length", 109),
-                                        _number_input("core-flank-len", "Flank length", 150),
-                                    ],
-                                    className="g-2",
-                                ),
-                                dbc.Button("Process", id="core-run-button", color="primary", className="run-button"),
-                                html.H3("Results"),
-                                dbc.Button(
-                                    "View Results",
-                                    id="core-results-button",
-                                    color="success",
-                                    className="results-button",
-                                ),
-                            ],
-                            className="input-panel",
-                        ),
-                        lg=4,
-                    ),
-                    dbc.Col(
-                        html.Div(
-                            [
-                                html.Div(
-                                    [
-                                        html.H3("Terminal"),
-                                        html.Span(id="core-status", className="status-pill"),
-                                    ],
-                                    className="terminal-header",
-                                ),
-                                html.Pre(id="core-terminal", className="terminal"),
-                            ],
-                            className="output-panel",
-                        ),
-                        lg=8,
-                    ),
-                ],
-                className="main-row",
-            ),
-            _core_results_modal(),
-        ]
-    )
-
 
 def create_app() -> Dash:
     app = Dash(
@@ -901,12 +790,9 @@ def create_app() -> Dash:
     app.layout = dbc.Container(
         [
             dcc.Store(id="madc-run-id"),
-            dcc.Store(id="core-run-id"),
             dcc.Interval(id="run-poller", interval=1000, n_intervals=0),
             dcc.Download(id="madc-download"),
-            dcc.Download(id="core-download"),
             dcc.Store(id="madc-terminal-scroll"),
-            dcc.Store(id="core-terminal-scroll"),
             html.Div(
                 [
                     html.Div(
@@ -918,7 +804,7 @@ def create_app() -> Dash:
                                 ],
                                 className="app-title-line",
                             ),
-                            html.P("Microhaplotype assignment and Ref/Alt database workflows"),
+                            html.P("Microhaplotype assignment workflow"),
                         ],
                         className="app-title",
                     ),
@@ -932,15 +818,7 @@ def create_app() -> Dash:
                 ],
                 className="app-header",
             ),
-            dbc.Tabs(
-                [
-                    dbc.Tab(_madc_tab(), label="MADC Hap Assignment", tab_id="madc"),
-                    dbc.Tab(_core_tab(), label="Core Ref/Alt DB", tab_id="core"),
-                ],
-                id="workflow-tabs",
-                active_tab="madc",
-                className="workflow-tabs",
-            ),
+            _madc_tab(),
         ],
         fluid=True,
         className="app-shell",
@@ -965,26 +843,12 @@ def register_callbacks(app: Dash) -> None:
         Input("madc-terminal", "children"),
     )
 
-    app.clientside_callback(
-        """
-        function(children) {
-            const terminal = document.getElementById("core-terminal");
-            if (terminal) {
-                terminal.scrollTop = terminal.scrollHeight;
-            }
-            return Date.now();
-        }
-        """,
-        Output("core-terminal-scroll", "data"),
-        Input("core-terminal", "children"),
-    )
-
     @app.callback(
         Output("madc-results-modal", "is_open"),
         Output("madc-results-message", "children"),
         Output("madc-results-file-groups", "style"),
-        Output("madc-core-files", "options"),
-        Output("madc-core-files", "value"),
+        Output("madc-main-files", "options"),
+        Output("madc-main-files", "value"),
         Output("madc-diagnostic-files", "options"),
         Output("madc-diagnostic-files", "value"),
         Input("madc-results-button", "n_clicks"),
@@ -1009,39 +873,15 @@ def register_callbacks(app: Dash) -> None:
                 [],
             )
 
-        core_options, diagnostic_options = _split_madc_result_options(state)
+        main_options, diagnostic_options = _split_madc_result_options(state)
         return (
             True,
             "Select files to include in the ZIP archive.",
             {"display": "block"},
-            core_options,
-            _option_values(core_options),
+            main_options,
+            _option_values(main_options),
             diagnostic_options,
             [],
-        )
-
-    @app.callback(
-        Output("core-results-modal", "is_open"),
-        Output("core-results-message", "children"),
-        Output("core-results-select", "style"),
-        Input("core-results-button", "n_clicks"),
-        Input("core-results-close", "n_clicks"),
-        State("core-run-id", "data"),
-        State("core-results-modal", "is_open"),
-        prevent_initial_call=True,
-    )
-    def toggle_core_results_modal(_open_clicks, _close_clicks, run_id, _is_open):
-        if ctx.triggered_id == "core-results-close":
-            return False, no_update, no_update
-
-        state = _snapshot(run_id)
-        if not _result_options(state):
-            return True, "No output files found yet. Run the workflow first.", {"display": "none"}
-
-        return (
-            True,
-            "Select files to include in the ZIP archive. Leave blank to download all result files.",
-            {"display": "block"},
         )
 
     @app.callback(
@@ -1076,7 +916,10 @@ def register_callbacks(app: Dash) -> None:
     @app.callback(
         Output("madc-run-id", "data"),
         Output("madc-alert", "children"),
+        Output("madc-verification-modal", "is_open"),
+        Output("madc-verification-details", "children"),
         Input("madc-run-button", "n_clicks"),
+        Input("madc-verification-close", "n_clicks"),
         State("madc-report-upload", "fileNames"),
         State("madc-report-upload", "upload_id"),
         State("madc-report-upload", "isCompleted"),
@@ -1085,11 +928,15 @@ def register_callbacks(app: Dash) -> None:
     )
     def start_madc(
         _clicks,
+        _close_clicks,
         report_files,
         report_upload_id,
         report_completed,
         panel_id,
     ):
+        if ctx.triggered_id == "madc-verification-close":
+            return no_update, no_update, False, no_update
+
         try:
             panel = _get_madc_panel(panel_id)
             _validate_madc_panel_files(panel)
@@ -1114,6 +961,7 @@ def register_callbacks(app: Dash) -> None:
             madc_check = validate_raw_madc(
                 report,
                 first_sample_col=panel.first_sample_col,
+                panel_lut_path=panel.snpid_lut,
                 strict_ref_alt=False,
             )
 
@@ -1178,110 +1026,16 @@ def register_callbacks(app: Dash) -> None:
                     className="run-alert",
                 )
 
-            return run_id, alert
+            return run_id, alert, False, []
+        except MADCValidationError as exc:
+            return (
+                no_update,
+                dbc.Alert("MADC verification failed", color="danger", className="run-alert"),
+                True,
+                _madc_verification_details(exc),
+            )
         except Exception as exc:  # noqa: BLE001 - shown in UI.
-            return no_update, dbc.Alert(str(exc), color="danger", className="run-alert")
-
-    @app.callback(
-        Output("core-run-id", "data"),
-        Output("core-alert", "children"),
-        Input("core-run-button", "n_clicks"),
-        State("core-probe-upload", "fileNames"),
-        State("core-probe-upload", "upload_id"),
-        State("core-probe-upload", "isCompleted"),
-        State("core-chr-len-upload", "fileNames"),
-        State("core-chr-len-upload", "upload_id"),
-        State("core-chr-len-upload", "isCompleted"),
-        State("core-madc-upload", "fileNames"),
-        State("core-madc-upload", "upload_id"),
-        State("core-madc-upload", "isCompleted"),
-        State("core-ref-upload", "fileNames"),
-        State("core-ref-upload", "upload_id"),
-        State("core-ref-upload", "isCompleted"),
-        State("core-output-prefix", "value"),
-        State("core-ref-len", "value"),
-        State("core-flank-len", "value"),
-        prevent_initial_call=True,
-    )
-    def start_core(
-        _clicks,
-        probe_files,
-        probe_upload_id,
-        probe_completed,
-        chr_len_files,
-        chr_len_upload_id,
-        chr_len_completed,
-        madc_files,
-        madc_upload_id,
-        madc_completed,
-        ref_files,
-        ref_upload_id,
-        ref_completed,
-        output_prefix,
-        ref_len,
-        flank_len,
-    ):
-        try:
-            ref_len = _positive_int(ref_len, "Ref length")
-            flank_len = _positive_int(flank_len, "Flank length")
-            output_prefix = _validate_output_prefix(output_prefix)
-
-            missing = _missing_commands(["python3", "blastn", "makeblastdb", "esl-sfetch", "seqkit", "mmseqs"])
-            if missing:
-                raise ValueError("Missing required commands: " + ", ".join(missing))
-
-            run_root = RUN_BASE / "core" / uuid.uuid4().hex
-            work_dir = run_root / "work"
-            work_dir.mkdir(parents=True, exist_ok=True)
-
-            probe = _stage_uploaded_file(
-                probe_files, probe_upload_id, probe_completed, work_dir, "Probe design file", "probe_design.csv"
-            )
-            chr_len = _stage_uploaded_file(
-                chr_len_files,
-                chr_len_upload_id,
-                chr_len_completed,
-                work_dir,
-                "Chromosome length file",
-                "chromosome_lengths.txt",
-            )
-            madc = _stage_uploaded_file(
-                madc_files, madc_upload_id, madc_completed, work_dir, "MADC report", "madc_report.csv"
-            )
-            reference = _stage_uploaded_file(
-                ref_files, ref_upload_id, ref_completed, work_dir, "Reference genome FASTA", "reference_genome.fa"
-            )
-
-            assert probe and chr_len and madc and reference
-            input_files = {path.relative_to(work_dir).as_posix() for path in [probe, chr_len, madc, reference]}
-
-            command = [
-                "bash",
-                str(CORE_WORKFLOW),
-                "--work-dir",
-                str(work_dir),
-                "--scripts-dir",
-                str(CORE_SCRIPTS_DIR),
-                "--probe-file",
-                str(probe),
-                "--chr-len",
-                str(chr_len),
-                "--ref-genome",
-                str(reference),
-                "--report",
-                str(madc),
-                "--output-prefix",
-                output_prefix,
-                "--ref-len",
-                str(ref_len),
-                "--flank-len",
-                str(flank_len),
-            ]
-
-            run_id = _start_run("Core Ref/Alt DB", command, work_dir, input_files)
-            return run_id, dbc.Alert("Run started.", color="info", className="run-alert")
-        except Exception as exc:  # noqa: BLE001 - shown in UI.
-            return no_update, dbc.Alert(str(exc), color="danger", className="run-alert")
+            return no_update, dbc.Alert(str(exc), color="danger", className="run-alert"), False, []
 
     @app.callback(
         Output("madc-terminal", "children"),
@@ -1292,24 +1046,6 @@ def register_callbacks(app: Dash) -> None:
         Input("madc-run-id", "data"),
     )
     def poll_madc(_ticks, run_id):
-        state = _snapshot(run_id)
-        options = _result_options(state)
-        return (
-            _terminal_text(state),
-            _status_text(state),
-            options,
-            len(options) == 0,
-        )
-
-    @app.callback(
-        Output("core-terminal", "children"),
-        Output("core-status", "children"),
-        Output("core-results-select", "options"),
-        Output("core-download-button", "disabled"),
-        Input("run-poller", "n_intervals"),
-        Input("core-run-id", "data"),
-    )
-    def poll_core(_ticks, run_id):
         state = _snapshot(run_id)
         options = _result_options(state)
         return (
@@ -1331,26 +1067,15 @@ def register_callbacks(app: Dash) -> None:
         return _status_class(state), _run_button_disabled(state), _run_button_children(state)
 
     @app.callback(
-        Output("core-status", "className"),
-        Output("core-run-button", "disabled"),
-        Output("core-run-button", "children"),
-        Input("run-poller", "n_intervals"),
-        Input("core-run-id", "data"),
-    )
-    def update_core_run_state(_ticks, run_id):
-        state = _snapshot(run_id)
-        return _status_class(state), _run_button_disabled(state), _run_button_children(state)
-
-    @app.callback(
         Output("madc-download", "data"),
         Input("madc-download-button", "n_clicks"),
         State("madc-run-id", "data"),
-        State("madc-core-files", "value"),
+        State("madc-main-files", "value"),
         State("madc-diagnostic-files", "value"),
         prevent_initial_call=True,
     )
-    def download_madc(_clicks, run_id, core_selected, diagnostic_selected):
-        selected = list(dict.fromkeys((core_selected or []) + (diagnostic_selected or [])))
+    def download_madc(_clicks, run_id, main_selected, diagnostic_selected):
+        selected = list(dict.fromkeys((main_selected or []) + (diagnostic_selected or [])))
         try:
             return dcc.send_bytes(
                 _zip_selected(run_id, selected, default_all=False),
@@ -1358,20 +1083,6 @@ def register_callbacks(app: Dash) -> None:
             )
         except Exception:
             return no_update
-
-    @app.callback(
-        Output("core-download", "data"),
-        Input("core-download-button", "n_clicks"),
-        State("core-run-id", "data"),
-        State("core-results-select", "value"),
-        prevent_initial_call=True,
-    )
-    def download_core(_clicks, run_id, selected):
-        try:
-            return dcc.send_bytes(_zip_selected(run_id, selected), f"core_db_results_{str(run_id)[:8]}.zip")
-        except Exception:
-            return no_update
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the HapApp Dash app")

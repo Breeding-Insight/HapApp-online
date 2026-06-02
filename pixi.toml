@@ -1,5 +1,5 @@
 [project]
-name = "hapapp-local"
+name = "hapapp-online"
 version = "0.1.0"
 description = "Dash interface for HapApp microhaplotype workflows"
 channels = ["conda-forge", "bioconda"]
@@ -8,12 +8,9 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 [dependencies]
 python = ">=3.11,<3.14"
 blast = "*"
-hmmer = "*"
-seqkit = "*"
-mmseqs2 = "*"
 
 [pypi-dependencies]
-hapapp-local = { path = ".", editable = true }
+hapapp-online = { path = ".", editable = true }
 biopython = "*"
 cutadapt = "*"
 dash = "*"
@@ -22,4 +19,4 @@ pandas = "*"
 dash-uploader = ">=0.6.1, <0.7"
 
 [tasks]
-hapapp-local = "hapapp-local"
+hapapp-online = "hapapp-online"

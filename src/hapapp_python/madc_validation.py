@@ -11,6 +11,7 @@ from typing import Iterator, TextIO
 MISSING = {"", "NA", "N/A", "NULL", "null", "NaN", "nan"}
 RAW_PREAMBLE = {"", "*"}
 REQUIRED_PREFIX = ("AlleleID", "CloneID", "AlleleSequence")
+PANEL_MARKER_ID_COLUMN = "Panel_markerID"
 
 RAW_REF_RE = re.compile(r"\|Ref$")
 RAW_ALT_RE = re.compile(r"\|Alt$")
@@ -36,6 +37,8 @@ class MADCCheckResult:
     n_ref_rows: int
     n_alt_rows: int
     n_other_rows: int
+    n_panel_marker_ids: int | None = None
+    n_clone_ids_missing_from_panel: int = 0
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -60,6 +63,8 @@ def validate_raw_madc(
     expected_header_row: int | None = None,
     max_header_scan_rows: int = 20,
     max_examples: int = 10,
+    panel_lut_path: str | Path | None = None,
+    max_missing_panel_clone_ids: int = 2,
     strict_ref_alt: bool = False,
     raise_on_warnings: bool = False,
 ) -> MADCCheckResult:
@@ -78,6 +83,12 @@ def validate_raw_madc(
         the header row is detected from the first `max_header_scan_rows` rows.
     max_header_scan_rows
         Number of rows to scan when auto-detecting the raw MADC header.
+    panel_lut_path
+        Optional selected panel SNP ID LUT path. When provided, unique CloneID
+        values in the raw MADC are checked against its Panel_markerID column.
+    max_missing_panel_clone_ids
+        Maximum number of unique CloneID values allowed to be absent from the
+        selected panel LUT before the upload is blocked. Default is 2.
     strict_ref_alt
         If True, missing Ref/Alt rows per CloneID are errors. If False, they
         are warnings.
@@ -101,6 +112,8 @@ def validate_raw_madc(
 
     if first_sample_col < 4:
         raise ValueError("first_sample_col is 1-based and must be at least 4.")
+    if max_missing_panel_clone_ids < 0:
+        raise ValueError("max_missing_panel_clone_ids must be zero or greater.")
 
     if not path.is_file():
         raise MADCValidationError([f"File not found: {path}"])
@@ -255,6 +268,24 @@ def validate_raw_madc(
     if indel_clones:
         warnings.append(f"Potential indels: Ref/Alt sequence lengths differ for CloneIDs {indel_clones}.")
 
+    n_panel_marker_ids: int | None = None
+    n_clone_ids_missing_from_panel = 0
+    if panel_lut_path is not None:
+        panel_marker_ids = _load_panel_marker_ids(panel_lut_path)
+        n_panel_marker_ids = len(panel_marker_ids)
+        missing_panel_clone_ids = sorted(scan["clone_ids"] - panel_marker_ids)
+        n_clone_ids_missing_from_panel = len(missing_panel_clone_ids)
+        if missing_panel_clone_ids:
+            message = (
+                f"{n_clone_ids_missing_from_panel} CloneID(s) from the raw MADC are missing from the selected "
+                f"panel LUT {PANEL_MARKER_ID_COLUMN} column. This usually means the wrong species panel was "
+                f"selected. Examples: {missing_panel_clone_ids[:max_examples]}."
+            )
+            if n_clone_ids_missing_from_panel > max_missing_panel_clone_ids:
+                errors.append(message)
+            else:
+                warnings.append(message)
+
     if raise_on_warnings and warnings and not errors:
         errors.append("MADC validation produced warnings and raise_on_warnings=True.")
 
@@ -272,6 +303,8 @@ def validate_raw_madc(
         n_ref_rows=scan["n_ref_rows"],
         n_alt_rows=scan["n_alt_rows"],
         n_other_rows=scan["n_other_rows"],
+        n_panel_marker_ids=n_panel_marker_ids,
+        n_clone_ids_missing_from_panel=n_clone_ids_missing_from_panel,
         warnings=tuple(warnings),
     )
 
@@ -290,6 +323,36 @@ def _find_fixed_header_row(rows: list[list[str]]) -> int | None:
         if header[:4] == ["Code_version", *REQUIRED_PREFIX]:
             return row_number
     return None
+
+
+def _load_panel_marker_ids(path: str | Path) -> set[str]:
+    path = Path(path)
+    if not path.is_file():
+        raise MADCValidationError([f"Panel LUT file not found: {path}"])
+
+    sample_text = _read_sample_text(path)
+    if not sample_text.strip():
+        raise MADCValidationError([f"Panel LUT file is empty: {path}"])
+
+    delimiter = _detect_delimiter(sample_text)
+    try:
+        with _open_text(path) as handle:
+            reader = csv.DictReader(handle, delimiter=delimiter)
+            raw_fieldnames = reader.fieldnames or []
+            cleaned_fieldnames = [_clean(fieldname) for fieldname in raw_fieldnames]
+            if PANEL_MARKER_ID_COLUMN not in cleaned_fieldnames:
+                raise MADCValidationError(
+                    [f"Panel LUT file must contain a {PANEL_MARKER_ID_COLUMN!r} column: {path}"]
+                )
+
+            marker_field = raw_fieldnames[cleaned_fieldnames.index(PANEL_MARKER_ID_COLUMN)]
+            return {
+                marker_id
+                for row in reader
+                if (marker_id := _clean(row.get(marker_field)))
+            }
+    except csv.Error as exc:
+        raise MADCValidationError([f"Could not parse panel LUT CSV: {exc}"]) from exc
 
 
 def _scan_data_rows(
