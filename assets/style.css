@@ -204,6 +204,24 @@ body {
   line-height: 14px;
 }
 
+.field-group {
+  margin-bottom: 7px;
+}
+
+.field-group label {
+  color: #263746;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.panel-select .Select-control,
+.panel-select .Select-menu-outer {
+  border-color: #9aa8b5;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
 .run-button {
   align-items: center;
   display: flex;

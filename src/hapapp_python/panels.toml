@@ -1,0 +1,18 @@
+# Default MADC species panels.
+#
+# Paths are resolved relative to the HapApp-online project root unless absolute.
+# The bundled demo panel is intentionally small and is meant for app testing and
+# Docker demonstrations with the example raw MADC fixture in:
+# vendor/HapApp_utils/data/genotyping_report/species_MADC.csv
+
+[panels.demo]
+label = "Demo panel (bundled example)"
+snpid_lut = "vendor/HapApp_utils/data/demo_panel/demo_snpID_lut.csv"
+allele_db_base = "vendor/HapApp_utils/data/demo_panel/demo_allele_db_v001.fa"
+matchcnt_lut_base = "vendor/HapApp_utils/data/demo_panel/demo_allele_db_v001_matchCnt_lut.txt"
+first_sample_col = 17
+design_len = 81
+seq_len = 109
+cov = 90
+iden = 85
+code_ver = "v1"

@@ -7,7 +7,7 @@ name = "hapapp-local"
 version = "0.1.0"
 description = "Dash interface for HapApp microhaplotype assignment and core DB workflows"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
   "biopython",
   "cutadapt",
@@ -24,4 +24,4 @@ hapapp-local = "hapapp_python.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-hapapp_python = ["py.typed"]
+hapapp_python = ["py.typed", "panels.toml"]

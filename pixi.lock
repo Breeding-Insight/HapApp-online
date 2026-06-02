@@ -991,7 +991,7 @@ packages:
 - pypi: ./
   name: hapapp-local
   version: 0.1.0
-  sha256: 0fe8ed65331eaf6eacd5939d6ea5d50bce45bb0341160394ce9926a12b95a220
+  sha256: 89cbe86e435df5152c7795a2d91591120b6031fe10274266585217ba3734a7bb
   requires_dist:
   - biopython
   - cutadapt
@@ -999,7 +999,7 @@ packages:
   - dash-bootstrap-components
   - dash-uploader>=0.6.1,<0.7
   - pandas
-  requires_python: '>=3.10'
+  requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/bioconda/linux-64/hmmer-3.4-hb6cb901_4.tar.bz2
   sha256: 604f55ee1f16a9f3c2d07f90eeb4331f5b9c1dca8ed1b70e0fea3bf81b140310
   md5: 689f962720e131fe4849e2909181120a

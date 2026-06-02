@@ -55,7 +55,9 @@ docker run --rm --platform linux/amd64 -p 8050:8050 -v hapapp-runs:/tmp/hapapp_l
 
 The app has two tabs.
 
-`MADC Hap Assignment` uses disk-backed browser file pickers for the MADC report, SNP ID LUT, base allele DB FASTA, and base match-count LUT. Defaults are first sample column `17`, design length `81`, sequence length `109`, coverage `90`, identity `85`, and code version `v1`. This tab is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
+`MADC Hap Assignment` accepts an uploaded raw DArT/MADC report and a species panel selection. The selected panel supplies the SNP ID LUT, allele DB FASTA, match-count LUT, optional indel/duplicate-tag files, and workflow parameters from `src/hapapp_python/panels.toml`. This tab is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
+
+The bundled `Demo panel (bundled example)` points at small example files in `vendor/HapApp_utils/data/demo_panel` and can be paired with `vendor/HapApp_utils/data/genotyping_report/species_MADC.csv` for UI testing and Docker demonstrations. The demo panel is not a production allele database.
 
 `Core Ref/Alt DB` uses the same disk-backed browser file pickers for the probe design file, chromosome length file, MADC report, and reference genome FASTA. Uploaded files are staged as filesystem paths for the workflows instead of being passed through Dash callback state as base64 strings. Defaults are ref length `109` and flank length `150`. This tab should only be used once to establish a microhaplotype database (v001) for a new panel. Once established, you will run the `MADC Hap Assignment` tab for all subsequent processing runs.
 
@@ -66,6 +68,8 @@ Each run creates a session-specific directory under the system temp directory. R
 ```text
 assets/                  Dash CSS assets
 src/hapapp_python/       Dash app package
+src/hapapp_python/panels.toml
+                         Editable MADC species panel registry
 vendor/HapApp_utils/     Vendored utility snapshot
 workflows/               Parameterized bash workflows used by the app
 pixi.toml                Reproducible Python and bioinformatics environment
