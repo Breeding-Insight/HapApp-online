@@ -9,69 +9,37 @@ import shutil
 import subprocess
 import tempfile
 import threading
-import tomllib
 import uuid
 import webbrowser
 import zipfile
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
 
 import dash_bootstrap_components as dbc
 import dash_uploader as du
 from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_update
 
+from hapapp_python.madc_workflow import build_madc_command, missing_madc_commands
 from hapapp_python.madc_validation import MADCValidationError, validate_raw_madc
+from hapapp_python.panels import (
+    default_madc_panel_value,
+    get_madc_panel,
+    madc_panel_options,
+    validate_madc_panel_files,
+)
+from hapapp_python.paths import PROJECT_ROOT, VENDOR_UTILS_DIR
 
 from . import __version__
 
-
-def _find_project_root() -> Path:
-    editable_root = Path(__file__).resolve().parents[2]
-    if (editable_root / "workflows").is_dir() and (editable_root / "vendor" / "HapApp_utils").is_dir():
-        return editable_root
-
-    cwd = Path.cwd().resolve()
-    if (cwd / "workflows").is_dir() and (cwd / "vendor" / "HapApp_utils").is_dir():
-        return cwd
-
-    return editable_root
-
-
-PROJECT_ROOT = _find_project_root()
-WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
-VENDOR_UTILS_DIR = PROJECT_ROOT / "vendor" / "HapApp_utils"
-MADC_WORKFLOW = WORKFLOWS_DIR / "build02_madc_haps.sh"
-MADC_SCRIPTS_DIR = VENDOR_UTILS_DIR / "scripts" / "RefMatch_AltMatch_Other"
 RUN_BASE = Path(tempfile.gettempdir()) / "hapapp_online_runs"
 UPLOAD_BASE = RUN_BASE / "uploads"
-MAX_UPLOAD_MB = 50 * 1024
+MAX_UPLOAD_MB = 1000 * 1024
 UPLOAD_CHUNK_MB = 16
 MADC_PREVIEW_EMPTY_MESSAGE = "Upload an MADC file to display a preview."
 MADC_MAIN_RESULT_PATTERN = re.compile(
     r"_snpID_rename_updatedSeq\.csv$|_snpID_rename\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
 )
-PANEL_CONFIG_PATH = Path(os.environ.get("HAPAPP_PANELS_FILE", Path(__file__).with_name("panels.toml")))
 APP_NAME = "HapApp"
-
-
-@dataclass(frozen=True)
-class MADCPanel:
-    panel_id: str
-    label: str
-    snpid_lut: Path
-    allele_db_base: Path
-    matchcnt_lut_base: Path
-    allele_db_indel: Path | None
-    matchcnt_lut_indel: Path | None
-    dup_tags: Path | None
-    first_sample_col: int
-    design_len: int
-    seq_len: int
-    cov: float
-    iden: float
-    code_ver: str
 
 
 @dataclass
@@ -175,157 +143,6 @@ def _stage_uploaded_file(
     if source is None:
         return None
     return _stage_local_file(str(source), destination, label, fallback)
-
-
-def _missing_commands(commands: Iterable[str]) -> list[str]:
-    return [cmd for cmd in commands if shutil.which(cmd) is None]
-
-
-def _load_madc_panels(config_path: Path = PANEL_CONFIG_PATH) -> dict[str, MADCPanel]:
-    try:
-        with config_path.open("rb") as handle:
-            data = tomllib.load(handle)
-    except FileNotFoundError as exc:
-        raise ValueError(f"MADC panels file not found: {config_path}") from exc
-    except tomllib.TOMLDecodeError as exc:
-        raise ValueError(f"Could not parse MADC panels file {config_path}: {exc}") from exc
-
-    raw_panels = data.get("panels")
-    if not isinstance(raw_panels, Mapping) or not raw_panels:
-        raise ValueError("MADC panels file must define at least one [panels.<panel_id>] entry.")
-
-    panels: dict[str, MADCPanel] = {}
-    for panel_id, raw_panel in raw_panels.items():
-        if not isinstance(panel_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", panel_id):
-            raise ValueError(f"Invalid MADC panel id: {panel_id!r}")
-        if not isinstance(raw_panel, Mapping):
-            raise ValueError(f"MADC panel {panel_id!r} must be a TOML table.")
-        panels[panel_id] = _parse_madc_panel(panel_id, raw_panel)
-
-    return panels
-
-
-def _parse_madc_panel(panel_id: str, raw_panel: Mapping[str, Any]) -> MADCPanel:
-    allele_db_indel = _panel_optional_path(raw_panel, "allele_db_indel", panel_id)
-    matchcnt_lut_indel = _panel_optional_path(raw_panel, "matchcnt_lut_indel", panel_id)
-    if bool(allele_db_indel) != bool(matchcnt_lut_indel):
-        raise ValueError(
-            f"MADC panel {panel_id!r} must define both allele_db_indel and matchcnt_lut_indel, or neither."
-        )
-
-    return MADCPanel(
-        panel_id=panel_id,
-        label=_panel_string(raw_panel, "label", panel_id),
-        snpid_lut=_panel_path(raw_panel, "snpid_lut", panel_id),
-        allele_db_base=_panel_path(raw_panel, "allele_db_base", panel_id),
-        matchcnt_lut_base=_panel_path(raw_panel, "matchcnt_lut_base", panel_id),
-        allele_db_indel=allele_db_indel,
-        matchcnt_lut_indel=matchcnt_lut_indel,
-        dup_tags=_panel_optional_path(raw_panel, "dup_tags", panel_id),
-        first_sample_col=_panel_positive_int(raw_panel, "first_sample_col", panel_id),
-        design_len=_panel_positive_int(raw_panel, "design_len", panel_id),
-        seq_len=_panel_positive_int(raw_panel, "seq_len", panel_id),
-        cov=_panel_number(raw_panel, "cov", panel_id),
-        iden=_panel_number(raw_panel, "iden", panel_id),
-        code_ver=_panel_string(raw_panel, "code_ver", panel_id),
-    )
-
-
-def _panel_string(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> str:
-    value = raw_panel.get(field_name)
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"MADC panel {panel_id!r} must define non-empty {field_name!r}.")
-    return value.strip()
-
-
-def _panel_path(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> Path:
-    return _resolve_panel_path(_panel_string(raw_panel, field_name, panel_id))
-
-
-def _panel_optional_path(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> Path | None:
-    value = raw_panel.get(field_name)
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"MADC panel {panel_id!r} has invalid optional path {field_name!r}.")
-    return _resolve_panel_path(value.strip())
-
-
-def _resolve_panel_path(value: str) -> Path:
-    path = Path(value).expanduser()
-    return path if path.is_absolute() else PROJECT_ROOT / path
-
-
-def _panel_positive_int(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> int:
-    try:
-        value = int(raw_panel[field_name])
-    except KeyError as exc:
-        raise ValueError(f"MADC panel {panel_id!r} must define {field_name!r}.") from exc
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"MADC panel {panel_id!r} has invalid integer value for {field_name!r}.") from exc
-    if value <= 0:
-        raise ValueError(f"MADC panel {panel_id!r} field {field_name!r} must be greater than zero.")
-    return value
-
-
-def _panel_number(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> float:
-    try:
-        value = float(raw_panel[field_name])
-    except KeyError as exc:
-        raise ValueError(f"MADC panel {panel_id!r} must define {field_name!r}.") from exc
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"MADC panel {panel_id!r} has invalid numeric value for {field_name!r}.") from exc
-    if value <= 0:
-        raise ValueError(f"MADC panel {panel_id!r} field {field_name!r} must be greater than zero.")
-    return value
-
-
-def _madc_panel_options() -> list[dict[str, object]]:
-    try:
-        panels = _load_madc_panels()
-    except ValueError as exc:
-        return [{"label": f"Panel configuration error: {exc}", "value": "__panel_config_error__", "disabled": True}]
-    return [{"label": panel.label, "value": panel.panel_id} for panel in panels.values()]
-
-
-def _default_madc_panel_value() -> str | None:
-    options = _madc_panel_options()
-    for option in options:
-        if not option.get("disabled"):
-            value = option.get("value")
-            return str(value) if value else None
-    return None
-
-
-def _get_madc_panel(panel_id: str | None) -> MADCPanel:
-    if not panel_id:
-        raise ValueError("Select a species panel before starting the MADC workflow.")
-
-    panels = _load_madc_panels()
-    try:
-        return panels[panel_id]
-    except KeyError as exc:
-        raise ValueError(f"Unknown species panel: {panel_id}") from exc
-
-
-def _validate_madc_panel_files(panel: MADCPanel) -> None:
-    checks = [
-        ("SNP ID LUT", panel.snpid_lut),
-        ("base allele DB FASTA", panel.allele_db_base),
-        ("base match-count LUT", panel.matchcnt_lut_base),
-    ]
-    if panel.allele_db_indel:
-        checks.append(("indel allele DB FASTA", panel.allele_db_indel))
-    if panel.matchcnt_lut_indel:
-        checks.append(("indel match-count LUT", panel.matchcnt_lut_indel))
-    if panel.dup_tags:
-        checks.append(("duplicate-tags file", panel.dup_tags))
-
-    missing = [f"{label}: {path}" for label, path in checks if not path.is_file()]
-    if missing:
-        raise ValueError(
-            f"Selected species panel {panel.label!r} is missing configured file(s): " + "; ".join(missing)
-        )
 
 
 def _list_files(work_dir: Path, input_files: set[str]) -> list[str]:
@@ -705,8 +522,8 @@ def _madc_tab() -> html.Div:
                                         dbc.Label("Species panel", html_for="madc-panel-select"),
                                         dcc.Dropdown(
                                             id="madc-panel-select",
-                                            options=_madc_panel_options(),
-                                            value=_default_madc_panel_value(),
+                                            options=madc_panel_options(),
+                                            value=default_madc_panel_value(),
                                             clearable=False,
                                             className="panel-select",
                                         ),
@@ -939,14 +756,11 @@ def register_callbacks(app: Dash) -> None:
 
         try:
             # User-facing MADC parameters live on the selected species panel.
-            panel = _get_madc_panel(panel_id)
-            _validate_madc_panel_files(panel)
+            panel = get_madc_panel(panel_id)
+            validate_madc_panel_files(panel)
 
             # Check local tools before creating a run that cannot execute.
-            required_commands = ["python3", "blastn", "makeblastdb"]
-            if panel.seq_len > panel.design_len:
-                required_commands.append("cutadapt")
-            missing = _missing_commands(required_commands)
+            missing = missing_madc_commands(panel)
             if missing:
                 raise ValueError("Missing required commands: " + ", ".join(missing))
 
@@ -971,45 +785,7 @@ def register_callbacks(app: Dash) -> None:
             )
 
             # After validation passes, hand the selected panel files to the shell workflow.
-            command = [
-                "bash",
-                str(MADC_WORKFLOW),
-                "--work-dir",
-                str(work_dir),
-                "--scripts-dir",
-                str(MADC_SCRIPTS_DIR),
-                "--report",
-                str(report),
-                "--snpid-lut",
-                str(panel.snpid_lut),
-                "--allele-db-base",
-                str(panel.allele_db_base),
-                "--matchcnt-lut-base",
-                str(panel.matchcnt_lut_base),
-                "--first-sample-col",
-                str(panel.first_sample_col),
-                "--design-len",
-                str(panel.design_len),
-                "--seq-len",
-                str(panel.seq_len),
-                "--cov",
-                str(panel.cov),
-                "--iden",
-                str(panel.iden),
-                "--code-ver",
-                panel.code_ver,
-            ]
-            if panel.allele_db_indel and panel.matchcnt_lut_indel:
-                command.extend(
-                    [
-                        "--allele-db-indel",
-                        str(panel.allele_db_indel),
-                        "--matchcnt-lut-indel",
-                        str(panel.matchcnt_lut_indel),
-                    ]
-                )
-            if panel.dup_tags:
-                command.extend(["--dup-tags", str(panel.dup_tags)])
+            command = build_madc_command(panel, report, work_dir)
 
             run_id = _start_run("MADC hap assignment", command, work_dir, input_files)
             if madc_check.warnings:
