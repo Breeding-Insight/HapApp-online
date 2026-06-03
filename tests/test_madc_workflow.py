@@ -5,10 +5,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from hapapp_python.madc_workflow import build_madc_command, missing_madc_commands
-from hapapp_python.panels import MADCPanel
+from hapapp_python.panels import ResolvedMADCPanel
 
 
-def _panel(**overrides) -> MADCPanel:
+def _panel(**overrides) -> ResolvedMADCPanel:
     values = {
         "panel_id": "demo",
         "label": "Demo",
@@ -26,7 +26,7 @@ def _panel(**overrides) -> MADCPanel:
         "code_ver": "v1",
     }
     values.update(overrides)
-    return MADCPanel(**values)
+    return ResolvedMADCPanel(**values)
 
 
 class MADCWorkflowTests(unittest.TestCase):

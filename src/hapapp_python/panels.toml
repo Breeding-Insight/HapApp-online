@@ -16,3 +16,16 @@ seq_len = 59
 cov = 90
 iden = 85
 code_ver = "v1"
+
+
+[panels.alfalfa]
+label = "Alfalfa 3k DArTag (v1.0)"
+snpid_lut = "https://github.com/alex-sandercock/test_alfalfa_haplotype_db/blob/main/data/f180bp/20201030-BI-Alfalfa_SNPs_DArTag-probe-design_snpID_lut.csv"
+allele_db_base = "https://github.com/alex-sandercock/test_alfalfa_haplotype_db/tree/main/data/versions" #This should use the highest version available.
+matchcnt_lut_base = "https://github.com/alex-sandercock/test_alfalfa_haplotype_db/tree/main/data/versions" #This should use the matching version of the allele_db base
+first_sample_col = 17
+design_len = 54
+seq_len = 81
+cov = 90
+iden = 85
+code_ver = "v1"

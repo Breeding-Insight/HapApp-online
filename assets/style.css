@@ -252,6 +252,40 @@ body {
   width: 14px;
 }
 
+.preflight-status {
+  display: none;
+}
+
+.preflight-status--active {
+  background: #eef6ff;
+  border: 1px solid #9ec5fe;
+  border-radius: 4px;
+  color: #1d4f7a;
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 12px;
+  padding: 9px 10px;
+}
+
+.preflight-status-content {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.preflight-spinner {
+  animation: run-spin 800ms linear infinite;
+  border: 2px solid rgba(29, 79, 122, 0.25);
+  border-radius: 50%;
+  border-top-color: #1d4f7a;
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 14px;
+  width: 14px;
+}
+
 @keyframes run-spin {
   to {
     transform: rotate(360deg);

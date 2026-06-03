@@ -55,7 +55,9 @@ docker run --rm --platform linux/amd64 -p 8050:8050 -v hapapp-runs:/tmp/hapapp_o
 
 `MADC Hap Assignment` accepts an uploaded raw DArT/MADC report and a species panel selection. The selected panel supplies the SNP ID LUT, allele DB FASTA, match-count LUT, optional indel/duplicate-tag files, and workflow parameters from `src/hapapp_python/panels.toml`. This workflow is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
 
-The bundled `Demo panel (bundled example)` points at small example files in `vendor/HapApp_utils/data/demo_panel` and can be paired with `vendor/HapApp_utils/data/genotyping_report/species_MADC.csv` for UI testing and Docker demonstrations. The demo panel is not a production allele database.
+The bundled `Demo panel (bundled example)` points at small example files in `vendor/HapApp_utils/data/demo_panel` and can be paired with `vendor/HapApp_utils/data/demo_panel/demo_raw_MADC.csv` for UI testing and Docker demonstrations. The demo panel is not a production allele database.
+
+Species panels can also point at private GitHub `blob` or `tree` URLs. Set `HAPAPP_GITHUB_TOKEN` in the server environment before using those panels. GitHub-backed panel files are downloaded fresh into that run's temp work directory under `panel_files/`, so one run cannot reuse or contaminate the next run's panel inputs.
 
 Each run creates a session-specific directory under the system temp directory. Result ZIP downloads are built from that run directory. The vendored `vendor/HapApp_utils/data` directory is not used for run outputs.
 

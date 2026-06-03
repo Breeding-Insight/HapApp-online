@@ -3,21 +3,24 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from hapapp_python.panels import MADCPanel
+from hapapp_python.panels import MADCPanel, ResolvedMADCPanel
 from hapapp_python.paths import VENDOR_UTILS_DIR, WORKFLOWS_DIR
 
 MADC_WORKFLOW = WORKFLOWS_DIR / "build02_madc_haps.sh"
 MADC_SCRIPTS_DIR = VENDOR_UTILS_DIR / "scripts" / "RefMatch_AltMatch_Other"
 
 
-def missing_madc_commands(panel: MADCPanel) -> list[str]:
+MADCWorkflowPanel = MADCPanel | ResolvedMADCPanel
+
+
+def missing_madc_commands(panel: MADCWorkflowPanel) -> list[str]:
     required_commands = ["python3", "blastn", "makeblastdb"]
     if panel.seq_len > panel.design_len:
         required_commands.append("cutadapt")
     return [cmd for cmd in required_commands if shutil.which(cmd) is None]
 
 
-def build_madc_command(panel: MADCPanel, report: Path, work_dir: Path) -> list[str]:
+def build_madc_command(panel: MADCWorkflowPanel, report: Path, work_dir: Path) -> list[str]:
     command = [
         "bash",
         str(MADC_WORKFLOW),

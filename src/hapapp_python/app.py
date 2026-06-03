@@ -19,13 +19,14 @@ import dash_bootstrap_components as dbc
 import dash_uploader as du
 from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_update
 
+from hapapp_python.github_panel_files import resolve_madc_panel_files
 from hapapp_python.madc_workflow import build_madc_command, missing_madc_commands
 from hapapp_python.madc_validation import MADCValidationError, validate_raw_madc
 from hapapp_python.panels import (
+    ResolvedMADCPanel,
     default_madc_panel_value,
     get_madc_panel,
     madc_panel_options,
-    validate_madc_panel_files,
 )
 from hapapp_python.paths import PROJECT_ROOT, VENDOR_UTILS_DIR
 
@@ -39,6 +40,7 @@ MADC_PREVIEW_EMPTY_MESSAGE = "Upload an MADC file to display a preview."
 MADC_MAIN_RESULT_PATTERN = re.compile(
     r"_snpID_rename_updatedSeq\.csv$|_snpID_rename\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
 )
+MADC_DB_VERSION_RE = re.compile(r"v(?P<version>\d{3})")
 APP_NAME = "HapApp"
 
 
@@ -49,6 +51,7 @@ class RunState:
     work_dir: Path
     input_files: set[str]
     command: list[str]
+    main_result_files: set[str] = field(default_factory=set)
     log: list[str] = field(default_factory=list)
     status: str = "running"
     returncode: int | None = None
@@ -145,16 +148,69 @@ def _stage_uploaded_file(
     return _stage_local_file(str(source), destination, label, fallback)
 
 
+def _relative_to_work_dir(path: Path, work_dir: Path) -> str | None:
+    try:
+        return path.resolve().relative_to(work_dir.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def _panel_input_files(panel: ResolvedMADCPanel, work_dir: Path) -> set[str]:
+    panel_paths = [
+        panel.snpid_lut,
+        panel.allele_db_base,
+        panel.matchcnt_lut_base,
+        panel.allele_db_indel,
+        panel.matchcnt_lut_indel,
+        panel.dup_tags,
+    ]
+    return {
+        relative
+        for panel_path in panel_paths
+        if panel_path is not None
+        if (relative := _relative_to_work_dir(panel_path, work_dir)) is not None
+    }
+
+
+def _bump_madc_db_version(filename: str) -> str | None:
+    if not filename.endswith(".fa"):
+        return None
+
+    match = MADC_DB_VERSION_RE.search(filename)
+    if not match:
+        return None
+
+    next_version = f"v{int(match.group('version')) + 1:03d}"
+    return filename[: match.start()] + next_version + filename[match.end() :]
+
+
+def _expected_new_madc_db_files(panel: ResolvedMADCPanel, work_dir: Path) -> set[str]:
+    db_input = panel.allele_db_indel or panel.allele_db_base
+    next_db_name = _bump_madc_db_version(db_input.name)
+    if next_db_name is None:
+        return set()
+
+    next_db = db_input.with_name(next_db_name)
+    next_lut = db_input.with_name(f"{next_db.stem}_matchCnt_lut.txt")
+    return {
+        relative
+        for output_path in [next_db, next_lut]
+        if (relative := _relative_to_work_dir(output_path, work_dir)) is not None
+    }
+
+
 def _list_files(work_dir: Path, input_files: set[str]) -> list[str]:
     if not work_dir.exists():
         return []
 
+    ignored_inputs = {input_file.rstrip("/") for input_file in input_files}
     files: list[str] = []
     for path in work_dir.rglob("*"):
         if not path.is_file():
             continue
         relative = path.relative_to(work_dir).as_posix()
-        if relative in input_files:
+        under_ignored_dir = any(relative.startswith(f"{input_file}/") for input_file in ignored_inputs)
+        if relative in ignored_inputs or under_ignored_dir:
             continue
         files.append(relative)
     return sorted(files)
@@ -204,7 +260,13 @@ def _run_process(run_id: str) -> None:
             state.log.append(f"[ERROR] {exc}")
 
 
-def _start_run(kind: str, command: list[str], work_dir: Path, input_files: set[str]) -> str:
+def _start_run(
+    kind: str,
+    command: list[str],
+    work_dir: Path,
+    input_files: set[str],
+    main_result_files: set[str] | None = None,
+) -> str:
     run_id = uuid.uuid4().hex
     state = RunState(
         run_id=run_id,
@@ -212,6 +274,7 @@ def _start_run(kind: str, command: list[str], work_dir: Path, input_files: set[s
         work_dir=work_dir,
         input_files=input_files,
         command=command,
+        main_result_files=set(main_result_files or []),
         log=[f"Starting {kind} workflow...", f"Working directory: {work_dir}"],
     )
     with RUNS_LOCK:
@@ -235,6 +298,7 @@ def _snapshot(run_id: str | None) -> RunState | None:
             work_dir=state.work_dir,
             input_files=set(state.input_files),
             command=list(state.command),
+            main_result_files=set(state.main_result_files),
             log=list(state.log),
             status=state.status,
             returncode=state.returncode,
@@ -271,13 +335,27 @@ def _run_button_disabled(state: RunState | None) -> bool:
     return state is not None and state.status == "running"
 
 
+def _processing_button_children():
+    return html.Span(
+        [html.Span(className="run-spinner", **{"aria-hidden": "true"}), html.Span("Processing...")],
+        className="run-button-content",
+    )
+
+
 def _run_button_children(state: RunState | None):
     if _run_button_disabled(state):
-        return html.Span(
-            [html.Span(className="run-spinner", **{"aria-hidden": "true"}), html.Span("Processing...")],
-            className="run-button-content",
-        )
+        return _processing_button_children()
     return "Process"
+
+
+def _preflight_status_children():
+    return html.Span(
+        [
+            html.Span(className="preflight-spinner", **{"aria-hidden": "true"}),
+            html.Span("Preparing run: retrieving panel files and validating MADC..."),
+        ],
+        className="preflight-status-content",
+    )
 
 
 def _terminal_text(state: RunState | None) -> str:
@@ -304,7 +382,7 @@ def _split_madc_result_options(state: RunState | None) -> tuple[list[dict[str, s
 
     for file_path in state.files:
         option = {"label": file_path, "value": file_path}
-        if "/" not in file_path and MADC_MAIN_RESULT_PATTERN.search(file_path):
+        if file_path in state.main_result_files or ("/" not in file_path and MADC_MAIN_RESULT_PATTERN.search(file_path)):
             main_files.append(option)
         else:
             diagnostic_files.append(option)
@@ -515,6 +593,11 @@ def _madc_tab() -> html.Div:
                             [
                                 html.H2("MADC Hap Assignment"),
                                 html.Div(id="madc-alert", className="alert-slot"),
+                                html.Div(
+                                    id="madc-preflight-status",
+                                    className="preflight-status",
+                                    **{"aria-live": "polite"},
+                                ),
                                 html.H3("Inputs"),
                                 _uploader_box("madc-report-upload", "MADC report (.csv)", ["csv", "txt"]),
                                 html.Div(
@@ -742,6 +825,16 @@ def register_callbacks(app: Dash) -> None:
         State("madc-report-upload", "isCompleted"),
         State("madc-panel-select", "value"),
         prevent_initial_call=True,
+        running=[
+            (Output("madc-preflight-status", "children"), _preflight_status_children(), []),
+            (
+                Output("madc-preflight-status", "className"),
+                "preflight-status preflight-status--active",
+                "preflight-status",
+            ),
+            (Output("madc-run-button", "disabled", allow_duplicate=True), True, False),
+            (Output("madc-run-button", "children", allow_duplicate=True), _processing_button_children(), "Process"),
+        ],
     )
     def start_madc(
         _clicks,
@@ -757,7 +850,6 @@ def register_callbacks(app: Dash) -> None:
         try:
             # User-facing MADC parameters live on the selected species panel.
             panel = get_madc_panel(panel_id)
-            validate_madc_panel_files(panel)
 
             # Check local tools before creating a run that cannot execute.
             missing = missing_madc_commands(panel)
@@ -776,22 +868,27 @@ def register_callbacks(app: Dash) -> None:
             assert report
             input_files = {report.relative_to(work_dir).as_posix()}
 
+            # GitHub-backed panels are copied into this run so every run starts clean.
+            resolved_panel = resolve_madc_panel_files(panel, work_dir)
+            input_files.update(_panel_input_files(resolved_panel, work_dir))
+            main_result_files = _expected_new_madc_db_files(resolved_panel, work_dir)
+
             # Gate the upload here; build02 should only see raw, panel-matched MADC files.
             madc_check = validate_raw_madc(
                 report,
-                first_sample_col=panel.first_sample_col,
-                panel_lut_path=panel.snpid_lut,
+                first_sample_col=resolved_panel.first_sample_col,
+                panel_lut_path=resolved_panel.snpid_lut,
                 strict_ref_alt=False,
             )
 
             # After validation passes, hand the selected panel files to the shell workflow.
-            command = build_madc_command(panel, report, work_dir)
+            command = build_madc_command(resolved_panel, report, work_dir)
 
-            run_id = _start_run("MADC hap assignment", command, work_dir, input_files)
+            run_id = _start_run("MADC hap assignment", command, work_dir, input_files, main_result_files)
             if madc_check.warnings:
                 alert = dbc.Alert(
                     [
-                        html.Strong(f"Run started for {panel.label}, but the MADC pre-check found warnings."),
+                        html.Strong(f"Run started for {resolved_panel.label}, but the MADC pre-check found warnings."),
                         html.Ul([html.Li(warning) for warning in madc_check.warnings[:8]]),
                     ],
                     color="warning",
@@ -800,7 +897,7 @@ def register_callbacks(app: Dash) -> None:
             else:
                 alert = dbc.Alert(
                     (
-                        f"Run started for {panel.label}. MADC pre-check passed: "
+                        f"Run started for {resolved_panel.label}. MADC pre-check passed: "
                         f"{madc_check.n_data_rows:,} allele rows, "
                         f"{madc_check.n_clone_ids:,} CloneIDs."
                     ),

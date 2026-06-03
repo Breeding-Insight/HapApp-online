@@ -7,14 +7,34 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from hapapp_python.paths import PROJECT_ROOT
 
 PANEL_CONFIG_PATH = Path(os.environ.get("HAPAPP_PANELS_FILE", Path(__file__).with_name("panels.toml")))
+PanelFileRef = Path | str
 
 
 @dataclass(frozen=True)
 class MADCPanel:
+    panel_id: str
+    label: str
+    snpid_lut: PanelFileRef
+    allele_db_base: PanelFileRef
+    matchcnt_lut_base: PanelFileRef
+    allele_db_indel: PanelFileRef | None
+    matchcnt_lut_indel: PanelFileRef | None
+    dup_tags: PanelFileRef | None
+    first_sample_col: int
+    design_len: int
+    seq_len: int
+    cov: float
+    iden: float
+    code_ver: str
+
+
+@dataclass(frozen=True)
+class ResolvedMADCPanel:
     panel_id: str
     label: str
     snpid_lut: Path
@@ -84,7 +104,7 @@ def get_madc_panel(panel_id: str | None, config_path: Path | None = None) -> MAD
         raise ValueError(f"Unknown species panel: {panel_id}") from exc
 
 
-def validate_madc_panel_files(panel: MADCPanel) -> None:
+def validate_madc_panel_files(panel: MADCPanel | ResolvedMADCPanel) -> None:
     checks = [
         ("SNP ID LUT", panel.snpid_lut),
         ("base allele DB FASTA", panel.allele_db_base),
@@ -97,16 +117,24 @@ def validate_madc_panel_files(panel: MADCPanel) -> None:
     if panel.dup_tags:
         checks.append(("duplicate-tags file", panel.dup_tags))
 
-    missing = [f"{label}: {path}" for label, path in checks if not path.is_file()]
+    # GitHub-backed panels are checked after they are copied into a run folder.
+    missing = [f"{label}: {path}" for label, path in checks if isinstance(path, Path) and not path.is_file()]
     if missing:
         raise ValueError(
             f"Selected species panel {panel.label!r} is missing configured file(s): " + "; ".join(missing)
         )
 
 
+def is_github_url(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and parsed.netloc.lower() in {"github.com", "www.github.com"}
+
+
 def _parse_madc_panel(panel_id: str, raw_panel: Mapping[str, Any]) -> MADCPanel:
-    allele_db_indel = _panel_optional_path(raw_panel, "allele_db_indel", panel_id)
-    matchcnt_lut_indel = _panel_optional_path(raw_panel, "matchcnt_lut_indel", panel_id)
+    allele_db_indel = _panel_optional_file_ref(raw_panel, "allele_db_indel", panel_id)
+    matchcnt_lut_indel = _panel_optional_file_ref(raw_panel, "matchcnt_lut_indel", panel_id)
     if bool(allele_db_indel) != bool(matchcnt_lut_indel):
         raise ValueError(
             f"MADC panel {panel_id!r} must define both allele_db_indel and matchcnt_lut_indel, or neither."
@@ -115,12 +143,12 @@ def _parse_madc_panel(panel_id: str, raw_panel: Mapping[str, Any]) -> MADCPanel:
     return MADCPanel(
         panel_id=panel_id,
         label=_panel_string(raw_panel, "label", panel_id),
-        snpid_lut=_panel_path(raw_panel, "snpid_lut", panel_id),
-        allele_db_base=_panel_path(raw_panel, "allele_db_base", panel_id),
-        matchcnt_lut_base=_panel_path(raw_panel, "matchcnt_lut_base", panel_id),
+        snpid_lut=_panel_file_ref(raw_panel, "snpid_lut", panel_id),
+        allele_db_base=_panel_file_ref(raw_panel, "allele_db_base", panel_id),
+        matchcnt_lut_base=_panel_file_ref(raw_panel, "matchcnt_lut_base", panel_id),
         allele_db_indel=allele_db_indel,
         matchcnt_lut_indel=matchcnt_lut_indel,
-        dup_tags=_panel_optional_path(raw_panel, "dup_tags", panel_id),
+        dup_tags=_panel_optional_file_ref(raw_panel, "dup_tags", panel_id),
         first_sample_col=_panel_positive_int(raw_panel, "first_sample_col", panel_id),
         design_len=_panel_positive_int(raw_panel, "design_len", panel_id),
         seq_len=_panel_positive_int(raw_panel, "seq_len", panel_id),
@@ -137,17 +165,21 @@ def _panel_string(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) 
     return value.strip()
 
 
-def _panel_path(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> Path:
-    return _resolve_panel_path(_panel_string(raw_panel, field_name, panel_id))
+def _panel_file_ref(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> PanelFileRef:
+    return _resolve_panel_file_ref(_panel_string(raw_panel, field_name, panel_id))
 
 
-def _panel_optional_path(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> Path | None:
+def _panel_optional_file_ref(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> PanelFileRef | None:
     value = raw_panel.get(field_name)
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"MADC panel {panel_id!r} has invalid optional path {field_name!r}.")
-    return _resolve_panel_path(value.strip())
+    return _resolve_panel_file_ref(value.strip())
+
+
+def _resolve_panel_file_ref(value: str) -> PanelFileRef:
+    return value if is_github_url(value) else _resolve_panel_path(value)
 
 
 def _resolve_panel_path(value: str) -> Path:
