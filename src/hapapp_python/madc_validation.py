@@ -13,8 +13,8 @@ RAW_PREAMBLE = {"", "*"}
 REQUIRED_PREFIX = ("AlleleID", "CloneID", "AlleleSequence")
 PANEL_MARKER_ID_COLUMN = "Panel_markerID"
 
-RAW_REF_RE = re.compile(r"\|Ref$")
-RAW_ALT_RE = re.compile(r"\|Alt$")
+RAW_ALLELE_SUFFIXES = ("|Ref", "|Alt", "|RefMatch", "|AltMatch", "|Other")
+RAW_ALLELE_SUFFIX_RE = re.compile(r"\|(Ref|Alt|RefMatch|AltMatch|Other)$")
 
 # HapApp/fixedAlleleID-style IDs generated downstream from raw MADC rows.
 FIXED_REF_RE = re.compile(r"\|Ref_0001$")
@@ -224,6 +224,13 @@ def validate_raw_madc(
     errors.extend(scan["errors"])
     warnings.extend(scan["warnings"])
 
+    if scan["invalid_allele_suffixes"]:
+        errors.append(
+            "Invalid raw MADC AlleleID suffixes found. AlleleID values must end with "
+            f"{', '.join(RAW_ALLELE_SUFFIXES)} and must not already contain fixed numeric suffixes. "
+            "Examples: " + "; ".join(scan["invalid_allele_suffixes"])
+        )
+
     if scan["n_data_rows"] == 0:
         errors.append("No allele data rows were found after the raw MADC header.")
 
@@ -376,6 +383,7 @@ def _scan_data_rows(
 
     malformed: list[str] = []
     missing_required: list[str] = []
+    invalid_allele_suffixes: list[str] = []
     fixed_examples: list[str] = []
     lowercase_examples: list[str] = []
     non_atcg_examples: list[str] = []
@@ -427,11 +435,15 @@ def _scan_data_rows(
                 if _is_fixed_id(allele_id) and len(fixed_examples) < max_examples:
                     fixed_examples.append(allele_id)
 
-                if RAW_REF_RE.search(allele_id):
+                raw_suffix_match = RAW_ALLELE_SUFFIX_RE.search(allele_id)
+                if raw_suffix_match is None:
+                    if len(invalid_allele_suffixes) < max_examples:
+                        invalid_allele_suffixes.append(f"row {row_num}: {allele_id}")
+                elif raw_suffix_match.group(1) == "Ref":
                     n_ref_rows += 1
                     clones_with_ref.add(clone_id)
                     ref_lengths.setdefault(clone_id, len(allele_seq))
-                elif RAW_ALT_RE.search(allele_id):
+                elif raw_suffix_match.group(1) == "Alt":
                     n_alt_rows += 1
                     clones_with_alt.add(clone_id)
                     alt_lengths.setdefault(clone_id, len(allele_seq))
@@ -497,6 +509,7 @@ def _scan_data_rows(
         "has_alt_0002": has_alt_0002,
         "has_tmp": has_tmp,
         "fixed_examples": fixed_examples,
+        "invalid_allele_suffixes": invalid_allele_suffixes,
     }
 
 
