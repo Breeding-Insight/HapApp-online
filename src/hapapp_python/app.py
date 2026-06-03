@@ -938,9 +938,11 @@ def register_callbacks(app: Dash) -> None:
             return no_update, no_update, False, no_update
 
         try:
+            # User-facing MADC parameters live on the selected species panel.
             panel = _get_madc_panel(panel_id)
             _validate_madc_panel_files(panel)
 
+            # Check local tools before creating a run that cannot execute.
             required_commands = ["python3", "blastn", "makeblastdb"]
             if panel.seq_len > panel.design_len:
                 required_commands.append("cutadapt")
@@ -952,12 +954,15 @@ def register_callbacks(app: Dash) -> None:
             work_dir = run_root / "work"
             work_dir.mkdir(parents=True, exist_ok=True)
 
+            # Stage the uploaded raw report inside the run directory.
             report = _stage_uploaded_file(
                 report_files, report_upload_id, report_completed, work_dir, "MADC report", "madc_report.csv"
             )
 
             assert report
             input_files = {report.relative_to(work_dir).as_posix()}
+
+            # Gate the upload here; build02 should only see raw, panel-matched MADC files.
             madc_check = validate_raw_madc(
                 report,
                 first_sample_col=panel.first_sample_col,
@@ -965,6 +970,7 @@ def register_callbacks(app: Dash) -> None:
                 strict_ref_alt=False,
             )
 
+            # After validation passes, hand the selected panel files to the shell workflow.
             command = [
                 "bash",
                 str(MADC_WORKFLOW),

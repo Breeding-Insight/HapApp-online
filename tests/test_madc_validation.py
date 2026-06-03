@@ -6,17 +6,69 @@ from pathlib import Path
 
 from hapapp_python.madc_validation import MADCValidationError, validate_raw_madc
 
+RAW_MADC_METADATA_COLUMNS = (
+    "AlleleID",
+    "CloneID",
+    "AlleleSequence",
+    "ClusterConsensusSequence",
+    "CallRate",
+    "OneRatioRef",
+    "OneRatioSnp",
+    "FreqHomRef",
+    "FreqHomSnp",
+    "FreqHets",
+    "PICRef",
+    "PICSnp",
+    "AvgPIC",
+    "AvgCountRef",
+    "AvgCountSnp",
+    "RatioAvgCountRefAvgCountSnp",
+)
+SAMPLE_COLUMNS = ("sample-a", "sample-b")
+
+
+def _preamble_row(first_value: str = "") -> str:
+    return ",".join(
+        [first_value, *([""] * (len(RAW_MADC_METADATA_COLUMNS) - 1)), *SAMPLE_COLUMNS]
+    )
+
+
+def _raw_madc_header(metadata_columns: tuple[str, ...] | list[str] = RAW_MADC_METADATA_COLUMNS) -> str:
+    return ",".join([*metadata_columns, *SAMPLE_COLUMNS])
+
+
+def _raw_madc_data_row(allele_id: str, clone_id: str, allele_sequence: str = "ATCG") -> str:
+    metadata_values = (
+        allele_id,
+        clone_id,
+        allele_sequence,
+        allele_sequence,
+        "1",
+        "1",
+        "0",
+        "1",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "10",
+        "5",
+        "2",
+    )
+    return ",".join([*metadata_values, "1", "2"])
+
 
 def _raw_madc_for_clone_ids(clone_ids: list[str]) -> str:
     rows = [
-        ",,,,sample-a",
-        "AlleleID,CloneID,AlleleSequence,sample-a,sample-b",
+        _preamble_row(),
+        _raw_madc_header(),
     ]
     for clone_id in clone_ids:
         rows.extend(
             [
-                f"{clone_id}|Ref,{clone_id},ATCG,1,2",
-                f"{clone_id}|Alt,{clone_id},ATCC,3,4",
+                _raw_madc_data_row(f"{clone_id}|Ref", clone_id),
+                _raw_madc_data_row(f"{clone_id}|Alt", clone_id, "ATCC"),
             ]
         )
     return "\n".join(rows)
@@ -24,13 +76,24 @@ def _raw_madc_for_clone_ids(clone_ids: list[str]) -> str:
 
 def _raw_madc_for_allele_ids(allele_ids: list[str]) -> str:
     rows = [
-        ",,,,sample-a",
-        "AlleleID,CloneID,AlleleSequence,sample-a,sample-b",
+        _preamble_row(),
+        _raw_madc_header(),
     ]
     for index, allele_id in enumerate(allele_ids, start=1):
         clone_id = allele_id.split("|", 1)[0] if "|" in allele_id else f"marker{index}"
-        rows.append(f"{allele_id},{clone_id},ATCG,1,2")
+        rows.append(_raw_madc_data_row(allele_id, clone_id))
     return "\n".join(rows)
+
+
+def _raw_madc_with_metadata_columns(metadata_columns: tuple[str, ...] | list[str]) -> str:
+    return "\n".join(
+        [
+            _preamble_row(),
+            _raw_madc_header(metadata_columns),
+            _raw_madc_data_row("marker1|Ref", "marker1"),
+            _raw_madc_data_row("marker1|Alt", "marker1", "ATCC"),
+        ]
+    )
 
 
 def _panel_lut_for_marker_ids(marker_ids: list[str], header: str = "Panel_markerID,Marker_ID") -> str:
@@ -41,16 +104,16 @@ class MADCValidationTests(unittest.TestCase):
     def test_detects_row_8_raw_header(self) -> None:
         content = "\n".join(
             [
-                ",,,,sample-a",
-                ",,,,sample-a",
-                ",,,,A",
-                ",,,,1",
-                "*,*,*,*,1",
-                "*,*,*,*,1",
-                "*,*,*,*,1",
-                "AlleleID,CloneID,AlleleSequence,sample-a,sample-b",
-                "marker1|Ref,marker1,ATCG,1,2",
-                "marker1|Alt,marker1,ATCC,3,4",
+                _preamble_row(),
+                _preamble_row(),
+                _preamble_row(),
+                _preamble_row(),
+                _preamble_row("*"),
+                _preamble_row("*"),
+                _preamble_row("*"),
+                _raw_madc_header(),
+                _raw_madc_data_row("marker1|Ref", "marker1"),
+                _raw_madc_data_row("marker1|Alt", "marker1", "ATCC"),
             ]
         )
 
@@ -58,7 +121,7 @@ class MADCValidationTests(unittest.TestCase):
             path = Path(tmp_dir) / "row8_madc.csv"
             path.write_text(content, encoding="utf-8")
 
-            result = validate_raw_madc(path, first_sample_col=4)
+            result = validate_raw_madc(path, first_sample_col=17)
 
         self.assertEqual(result.header_row_number, 8)
         self.assertEqual(result.n_data_rows, 2)
@@ -80,9 +143,9 @@ class MADCValidationTests(unittest.TestCase):
     def test_rejects_fixed_code_version_header(self) -> None:
         content = "\n".join(
             [
-                "Code_version,AlleleID,CloneID,AlleleSequence,sample-a",
-                "v1,marker1|Ref_0001,marker1,ATCG,1",
-                "v1,marker1|Alt_0002,marker1,ATCC,2",
+                ",".join(["Code_version", *RAW_MADC_METADATA_COLUMNS, *SAMPLE_COLUMNS]),
+                f"v1,{_raw_madc_data_row('marker1|Ref_0001', 'marker1')}",
+                f"v1,{_raw_madc_data_row('marker1|Alt_0002', 'marker1', 'ATCC')}",
             ]
         )
 
@@ -91,15 +154,15 @@ class MADCValidationTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
 
             with self.assertRaises(MADCValidationError):
-                validate_raw_madc(path, first_sample_col=5)
+                validate_raw_madc(path, first_sample_col=17)
 
     def test_rejects_fixed_ids_after_raw_header(self) -> None:
         content = "\n".join(
             [
-                ",,,,sample-a",
-                "AlleleID,CloneID,AlleleSequence,sample-a,sample-b",
-                "marker1|Ref_0001,marker1,ATCG,1,2",
-                "marker1|Alt_0002,marker1,ATCC,3,4",
+                _preamble_row(),
+                _raw_madc_header(),
+                _raw_madc_data_row("marker1|Ref_0001", "marker1"),
+                _raw_madc_data_row("marker1|Alt_0002", "marker1", "ATCC"),
             ]
         )
 
@@ -108,7 +171,43 @@ class MADCValidationTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
 
             with self.assertRaises(MADCValidationError):
-                validate_raw_madc(path, first_sample_col=4)
+                validate_raw_madc(path, first_sample_col=17)
+
+    def test_rejects_first_sample_col_before_raw_metadata_end(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "raw_madc.csv"
+            path.write_text(_raw_madc_for_clone_ids(["marker1"]), encoding="utf-8")
+
+            with self.assertRaises(ValueError) as err:
+                validate_raw_madc(path, first_sample_col=16)
+
+        self.assertIn("at least 17", str(err.exception))
+
+    def test_rejects_missing_renamed_or_reordered_metadata_columns(self) -> None:
+        missing_column = list(RAW_MADC_METADATA_COLUMNS)
+        missing_column.remove("ClusterConsensusSequence")
+
+        renamed_column = list(RAW_MADC_METADATA_COLUMNS)
+        renamed_column[4] = "CallRateRenamed"
+
+        reordered_columns = list(RAW_MADC_METADATA_COLUMNS)
+        reordered_columns[3], reordered_columns[4] = reordered_columns[4], reordered_columns[3]
+
+        scenarios = {
+            "missing": missing_column,
+            "renamed": renamed_column,
+            "reordered": reordered_columns,
+        }
+
+        for scenario, metadata_columns in scenarios.items():
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as tmp_dir:
+                path = Path(tmp_dir) / "bad_header.csv"
+                path.write_text(_raw_madc_with_metadata_columns(metadata_columns), encoding="utf-8")
+
+                with self.assertRaises(MADCValidationError) as err:
+                    validate_raw_madc(path, first_sample_col=17)
+
+                self.assertIn("must start with the raw MADC metadata columns", str(err.exception))
 
     def test_accepts_raw_allele_id_suffixes(self) -> None:
         content = _raw_madc_for_allele_ids(
@@ -125,7 +224,7 @@ class MADCValidationTests(unittest.TestCase):
             path = Path(tmp_dir) / "raw_suffixes.csv"
             path.write_text(content, encoding="utf-8")
 
-            result = validate_raw_madc(path, first_sample_col=4)
+            result = validate_raw_madc(path, first_sample_col=17)
 
         self.assertEqual(result.n_data_rows, 5)
         self.assertEqual(result.n_ref_rows, 1)
@@ -151,7 +250,7 @@ class MADCValidationTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
 
             with self.assertRaises(MADCValidationError) as err:
-                validate_raw_madc(path, first_sample_col=4)
+                validate_raw_madc(path, first_sample_col=17)
 
         message = str(err.exception)
         self.assertIn("Invalid raw MADC AlleleID suffixes", message)
@@ -166,7 +265,7 @@ class MADCValidationTests(unittest.TestCase):
             madc.write_text(_raw_madc_for_clone_ids(["marker1", "marker2"]), encoding="utf-8")
             lut.write_text(_panel_lut_for_marker_ids(["marker1", "marker2"]), encoding="utf-8")
 
-            result = validate_raw_madc(madc, first_sample_col=4, panel_lut_path=lut)
+            result = validate_raw_madc(madc, first_sample_col=17, panel_lut_path=lut)
 
         self.assertEqual(result.n_panel_marker_ids, 2)
         self.assertEqual(result.n_clone_ids_missing_from_panel, 0)
@@ -179,7 +278,7 @@ class MADCValidationTests(unittest.TestCase):
             madc.write_text(_raw_madc_for_clone_ids(["marker1", "marker2", "marker3"]), encoding="utf-8")
             lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
 
-            result = validate_raw_madc(madc, first_sample_col=4, panel_lut_path=lut)
+            result = validate_raw_madc(madc, first_sample_col=17, panel_lut_path=lut)
 
         self.assertEqual(result.n_panel_marker_ids, 1)
         self.assertEqual(result.n_clone_ids_missing_from_panel, 2)
@@ -194,7 +293,7 @@ class MADCValidationTests(unittest.TestCase):
             lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
 
             with self.assertRaises(MADCValidationError) as err:
-                validate_raw_madc(madc, first_sample_col=4, panel_lut_path=lut)
+                validate_raw_madc(madc, first_sample_col=17, panel_lut_path=lut)
 
         self.assertIn("wrong species panel", str(err.exception))
 
@@ -207,7 +306,7 @@ class MADCValidationTests(unittest.TestCase):
             lut.write_text(_panel_lut_for_marker_ids(["marker1"], header="Marker_ID,Other_ID"), encoding="utf-8")
 
             with self.assertRaises(MADCValidationError) as err:
-                validate_raw_madc(madc, first_sample_col=4, panel_lut_path=lut)
+                validate_raw_madc(madc, first_sample_col=17, panel_lut_path=lut)
 
         self.assertIn("Panel_markerID", str(err.exception))
 

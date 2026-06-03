@@ -10,13 +10,34 @@ from typing import Iterator, TextIO
 
 MISSING = {"", "NA", "N/A", "NULL", "null", "NaN", "nan"}
 RAW_PREAMBLE = {"", "*"}
-REQUIRED_PREFIX = ("AlleleID", "CloneID", "AlleleSequence")
+
+# Raw DArT reports keep marker metadata in the first 16 columns.
+RAW_MADC_METADATA_COLUMNS = (
+    "AlleleID",
+    "CloneID",
+    "AlleleSequence",
+    "ClusterConsensusSequence",
+    "CallRate",
+    "OneRatioRef",
+    "OneRatioSnp",
+    "FreqHomRef",
+    "FreqHomSnp",
+    "FreqHets",
+    "PICRef",
+    "PICSnp",
+    "AvgPIC",
+    "AvgCountRef",
+    "AvgCountSnp",
+    "RatioAvgCountRefAvgCountSnp",
+)
+RAW_MADC_HEADER_LOCATOR = RAW_MADC_METADATA_COLUMNS[:3]
 PANEL_MARKER_ID_COLUMN = "Panel_markerID"
 
+# These are the raw allele buckets HapApp expects before fixed ID assignment.
 RAW_ALLELE_SUFFIXES = ("|Ref", "|Alt", "|RefMatch", "|AltMatch", "|Other")
 RAW_ALLELE_SUFFIX_RE = re.compile(r"\|(Ref|Alt|RefMatch|AltMatch|Other)$")
 
-# HapApp/fixedAlleleID-style IDs generated downstream from raw MADC rows.
+# Fixed IDs are assigned downstream, so seeing them here means this is not raw input.
 FIXED_REF_RE = re.compile(r"\|Ref_0001$")
 FIXED_ALT_RE = re.compile(r"\|Alt_0002$")
 FIXED_TMP_RE = re.compile(r"_tmp_\d{4}$")
@@ -110,8 +131,11 @@ def validate_raw_madc(
     errors: list[str] = []
     warnings: list[str] = []
 
-    if first_sample_col < 4:
-        raise ValueError("first_sample_col is 1-based and must be at least 4.")
+    # Column 17 is where sample read counts start in raw MADC files.
+    if first_sample_col < len(RAW_MADC_METADATA_COLUMNS) + 1:
+        raise ValueError(
+            "first_sample_col is 1-based and must be at least 17 for raw MADC files."
+        )
     if max_missing_panel_clone_ids < 0:
         raise ValueError("max_missing_panel_clone_ids must be zero or greater.")
 
@@ -125,6 +149,7 @@ def validate_raw_madc(
     delimiter = _detect_delimiter(sample_text)
     rows_to_read = expected_header_row if expected_header_row is not None else max_header_scan_rows
 
+    # DArT preamble rows can push the real header down a few lines.
     first_rows = _read_first_rows(path, delimiter, rows_to_read)
     if expected_header_row is not None and len(first_rows) < expected_header_row:
         looks_fixed, examples = _scan_for_fixed_ids(path, delimiter)
@@ -152,11 +177,13 @@ def validate_raw_madc(
         raise MADCValidationError(
             [
                 "Could not find a raw MADC header row starting with "
-                f"{list(REQUIRED_PREFIX)} in the first {len(first_rows)} row(s)."
+                f"{list(RAW_MADC_HEADER_LOCATOR)} in the first {len(first_rows)} row(s)."
             ]
         )
 
     first_col = [_clean(row[0]) if row else "" for row in first_rows[: header_row_number - 1]]
+
+    # Raw DArT preamble rows have blank or '*' in column 1.
     if header_row_number == 1:
         errors.append(
             "Raw MADC files are expected to include DArT preamble rows before the AlleleID header. "
@@ -175,16 +202,18 @@ def validate_raw_madc(
 
     header = [_clean(value) for value in first_rows[header_row_number - 1]]
 
-    if tuple(header[:3]) != REQUIRED_PREFIX:
-        if header[:4] == ["Code_version", *REQUIRED_PREFIX]:
+    # Stop if the metadata block is not the raw DArT header shape.
+    observed_metadata_columns = tuple(header[: len(RAW_MADC_METADATA_COLUMNS)])
+    if observed_metadata_columns != RAW_MADC_METADATA_COLUMNS:
+        if header[:4] == ["Code_version", *RAW_MADC_HEADER_LOCATOR]:
             errors.append(
                 "This looks like a HapApp output/fixedAlleleID MADC because the first column is Code_version. "
                 "Upload the original raw MADC report instead."
             )
         else:
             errors.append(
-                f"Row {header_row_number} must start with {list(REQUIRED_PREFIX)}. "
-                f"Observed: {header[:3]!r}."
+                f"Row {header_row_number} must start with the raw MADC metadata columns "
+                f"{list(RAW_MADC_METADATA_COLUMNS)}. Observed: {list(observed_metadata_columns)!r}."
             )
 
     if len(header) < first_sample_col:
@@ -224,6 +253,7 @@ def validate_raw_madc(
     errors.extend(scan["errors"])
     warnings.extend(scan["warnings"])
 
+    # The workflow assigns fixed allele IDs later; uploads should still use raw suffixes.
     if scan["invalid_allele_suffixes"]:
         errors.append(
             "Invalid raw MADC AlleleID suffixes found. AlleleID values must end with "
@@ -234,6 +264,7 @@ def validate_raw_madc(
     if scan["n_data_rows"] == 0:
         errors.append("No allele data rows were found after the raw MADC header.")
 
+    # Catch processed files even when a raw-looking header slipped through.
     looks_fixed = (
         scan["has_ref_0001"] and scan["has_alt_0002"]
     ) or (
@@ -278,6 +309,7 @@ def validate_raw_madc(
     n_panel_marker_ids: int | None = None
     n_clone_ids_missing_from_panel = 0
     if panel_lut_path is not None:
+        # Panel mismatch usually means the user picked the wrong species panel.
         panel_marker_ids = _load_panel_marker_ids(panel_lut_path)
         n_panel_marker_ids = len(panel_marker_ids)
         missing_panel_clone_ids = sorted(scan["clone_ids"] - panel_marker_ids)
@@ -317,9 +349,10 @@ def validate_raw_madc(
 
 
 def _find_raw_header_row(rows: list[list[str]]) -> int | None:
+    # Find the candidate first; the full metadata check handles exactness.
     for row_number, row in enumerate(rows, start=1):
         header = [_clean(value) for value in row]
-        if tuple(header[:3]) == REQUIRED_PREFIX:
+        if tuple(header[: len(RAW_MADC_HEADER_LOCATOR)]) == RAW_MADC_HEADER_LOCATOR:
             return row_number
     return None
 
@@ -327,12 +360,13 @@ def _find_raw_header_row(rows: list[list[str]]) -> int | None:
 def _find_fixed_header_row(rows: list[list[str]]) -> int | None:
     for row_number, row in enumerate(rows, start=1):
         header = [_clean(value) for value in row]
-        if header[:4] == ["Code_version", *REQUIRED_PREFIX]:
+        if header[:4] == ["Code_version", *RAW_MADC_HEADER_LOCATOR]:
             return row_number
     return None
 
 
 def _load_panel_marker_ids(path: str | Path) -> set[str]:
+    # The panel LUT is the source of truth for marker membership.
     path = Path(path)
     if not path.is_file():
         raise MADCValidationError([f"Panel LUT file not found: {path}"])
@@ -401,6 +435,7 @@ def _scan_data_rows(
 
     try:
         with _open_text(path) as handle:
+            # One pass keeps large MADC uploads cheap and the modal examples short.
             reader = csv.reader(handle, delimiter=delimiter)
 
             for row_num, row in enumerate(reader, start=1):
@@ -426,6 +461,7 @@ def _scan_data_rows(
                 allele_id, clone_id, allele_seq = cleaned[0], cleaned[1], cleaned[2]
                 clone_ids.add(clone_id)
 
+                # Track fixed-ID clues while still reporting the row-level suffix problem.
                 if FIXED_REF_RE.search(allele_id):
                     has_ref_0001 = True
                 if FIXED_ALT_RE.search(allele_id):
@@ -435,6 +471,7 @@ def _scan_data_rows(
                 if _is_fixed_id(allele_id) and len(fixed_examples) < max_examples:
                     fixed_examples.append(allele_id)
 
+                # Ref/Alt drive pair checks; the other raw buckets are counted together.
                 raw_suffix_match = RAW_ALLELE_SUFFIX_RE.search(allele_id)
                 if raw_suffix_match is None:
                     if len(invalid_allele_suffixes) < max_examples:
