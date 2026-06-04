@@ -204,6 +204,24 @@ body {
   line-height: 14px;
 }
 
+.field-group {
+  margin-bottom: 7px;
+}
+
+.field-group label {
+  color: #263746;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.panel-select .Select-control,
+.panel-select .Select-menu-outer {
+  border-color: #9aa8b5;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
 .run-button {
   align-items: center;
   display: flex;
@@ -230,6 +248,40 @@ body {
   border-radius: 50%;
   border-top-color: #ffffff;
   display: inline-block;
+  height: 14px;
+  width: 14px;
+}
+
+.preflight-status {
+  display: none;
+}
+
+.preflight-status--active {
+  background: #eef6ff;
+  border: 1px solid #9ec5fe;
+  border-radius: 4px;
+  color: #1d4f7a;
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 12px;
+  padding: 9px 10px;
+}
+
+.preflight-status-content {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.preflight-spinner {
+  animation: run-spin 800ms linear infinite;
+  border: 2px solid rgba(29, 79, 122, 0.25);
+  border-radius: 50%;
+  border-top-color: #1d4f7a;
+  display: inline-block;
+  flex: 0 0 auto;
   height: 14px;
   width: 14px;
 }
@@ -343,6 +395,41 @@ label,
 .results-checklist input {
   flex: 0 0 auto;
   margin-top: 2px;
+}
+
+.verification-details h5 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.verification-list {
+  border: 1px solid #d6dee8;
+  border-radius: 4px;
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 0 14px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px 10px 30px;
+}
+
+.verification-list li {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.verification-list li:last-child {
+  margin-bottom: 0;
+}
+
+.verification-contact {
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
 }
 
 .terminal-header {

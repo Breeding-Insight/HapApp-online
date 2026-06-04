@@ -21,43 +21,43 @@ Install and run with Pixi:
 
 ```bash
 pixi install
-pixi run hapapp-local
+pixi run hapapp-online
 ```
 
-The app opens automatically in your default browser. To start the server without opening a browser, run `pixi run hapapp-local --no-open`.
+The app opens automatically in your default browser. To start the server without opening a browser, run `pixi run hapapp-online --no-open`.
 
 Pixi installs the Python app dependencies plus the command-line bioinformatics tools used by the workflows:
 
 - Python/PyPI: `dash`, `dash-bootstrap-components`, `dash-uploader`, `pandas`, `biopython`, `cutadapt`
-- Conda/Bioconda: `blast`, `hmmer` (`esl-sfetch`), `seqkit`, `mmseqs2`
+- Conda/Bioconda: `blast`
 
 ## Docker
 
 Build the image from the repository root:
 
 ```bash
-docker build --platform linux/amd64 -t hapapp-local .
+docker build --platform linux/amd64 -t hapapp-online .
 ```
 
 Run the app on <http://localhost:8050>:
 
 ```bash
-docker run --rm --platform linux/amd64 -p 8050:8050 hapapp-local
+docker run --rm --platform linux/amd64 -p 8050:8050 hapapp-online
 ```
 
-The image uses the checked-in `pixi.lock` file and serves Dash on `0.0.0.0:8050`. Workflow uploads and run outputs are stored under `/tmp/hapapp_local_runs` inside the container. To keep those files after the container exits, mount a volume:
+The image uses the checked-in `pixi.lock` file and serves Dash on `0.0.0.0:8050`. Workflow uploads and run outputs are stored under `/tmp/hapapp_online_runs` inside the container. To keep those files after the container exits, mount a volume:
 
 ```bash
-docker run --rm --platform linux/amd64 -p 8050:8050 -v hapapp-runs:/tmp/hapapp_local_runs hapapp-local
+docker run --rm --platform linux/amd64 -p 8050:8050 -v hapapp-runs:/tmp/hapapp_online_runs hapapp-online
 ```
 
-## Workflows
+## Workflow
 
-The app has two tabs.
+`MADC Hap Assignment` accepts an uploaded raw DArT/MADC report and a species panel selection. The selected panel supplies the SNP ID LUT, allele DB FASTA, match-count LUT, optional indel/duplicate-tag files, and workflow parameters from `src/hapapp_python/panels.toml`. This workflow is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
 
-`MADC Hap Assignment` uses disk-backed browser file pickers for the MADC report, SNP ID LUT, base allele DB FASTA, and base match-count LUT. Defaults are first sample column `17`, design length `81`, sequence length `109`, coverage `90`, identity `85`, and code version `v1`. This tab is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
+The bundled `Demo panel (bundled example)` points at small example files in `vendor/HapApp_utils/data/demo_panel` and can be paired with `vendor/HapApp_utils/data/demo_panel/demo_raw_MADC.csv` for UI testing and Docker demonstrations. The demo panel is not a production allele database.
 
-`Core Ref/Alt DB` uses the same disk-backed browser file pickers for the probe design file, chromosome length file, MADC report, and reference genome FASTA. Uploaded files are staged as filesystem paths for the workflows instead of being passed through Dash callback state as base64 strings. Defaults are ref length `109` and flank length `150`. This tab should only be used once to establish a microhaplotype database (v001) for a new panel. Once established, you will run the `MADC Hap Assignment` tab for all subsequent processing runs.
+Species panels can also point at private GitHub `blob` or `tree` URLs. Set `HAPAPP_GITHUB_TOKEN` in the server environment before using those panels. GitHub-backed panel files are downloaded fresh into that run's temp work directory under `panel_files/`, so one run cannot reuse or contaminate the next run's panel inputs.
 
 Each run creates a session-specific directory under the system temp directory. Result ZIP downloads are built from that run directory. The vendored `vendor/HapApp_utils/data` directory is not used for run outputs.
 
@@ -66,6 +66,8 @@ Each run creates a session-specific directory under the system temp directory. R
 ```text
 assets/                  Dash CSS assets
 src/hapapp_python/       Dash app package
+src/hapapp_python/panels.toml
+                         Editable MADC species panel registry
 vendor/HapApp_utils/     Vendored utility snapshot
 workflows/               Parameterized bash workflows used by the app
 pixi.toml                Reproducible Python and bioinformatics environment
@@ -74,9 +76,8 @@ pyproject.toml           Python package metadata
 
 ## Direct Workflow Use
 
-The scripts in `workflows/` can also be called directly. Run either script with `--help` for required arguments:
+The MADC workflow script in `workflows/` can also be called directly. Run it with `--help` for required arguments:
 
 ```bash
 bash workflows/build02_madc_haps.sh --help
-bash workflows/build01_ref_alt_core_db.sh --help
 ```

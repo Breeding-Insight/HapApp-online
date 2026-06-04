@@ -1,0 +1,3 @@
+alfalfaRep2vsXJDY1_shared_1000570|RefMatch	0
+alfalfaRep2vsXJDY1_shared_1000570|AltMatch	0
+alfalfaRep2vsXJDY1_shared_1000570|Other	0

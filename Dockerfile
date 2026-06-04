@@ -26,4 +26,4 @@ EXPOSE 8050
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('HAPAPP_PORT', '8050') + '/', timeout=3)"
 
-CMD ["hapapp-local", "--no-open"]
+CMD ["hapapp-online", "--no-open"]

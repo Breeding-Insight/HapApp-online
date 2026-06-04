@@ -26,6 +26,16 @@ dist/
 build/
 *.egg-info/
 
+# Generated BLAST databases
+*.ndb
+*.nhr
+*.nin
+*.njs
+*.not
+*.nsq
+*.ntf
+*.nto
+
 # Local UI verification artifacts
 .playwright-mcp/
 hapapp-*.png
