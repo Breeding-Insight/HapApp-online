@@ -257,7 +257,7 @@ def _base_allele_db_version(name: str) -> int | None:
     lower_name = name.lower()
     if "allele_db" not in lower_name or "matchcnt" in lower_name or "indel" in lower_name:
         return None
-    if not lower_name.endswith((".fa", ".fasta")):
+    if not lower_name.endswith(".fa"):
         return None
     return _version_number(lower_name)
 
