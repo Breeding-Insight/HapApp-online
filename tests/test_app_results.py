@@ -5,11 +5,14 @@ import unittest
 from pathlib import Path
 
 from hapapp_python.app import (
+    MADC_LOG_FILENAME,
     RunState,
     _expected_new_madc_db_files,
+    _fixed_madc_result_file,
     _list_files,
     _panel_input_files,
     _split_madc_result_options,
+    _write_run_log_file,
 )
 from hapapp_python.panels import ResolvedMADCPanel
 
@@ -120,6 +123,36 @@ class AppResultTests(unittest.TestCase):
                 "panel_files/alfalfa/alfalfa_allele_db_v011.nhr",
             ],
         )
+
+    def test_finds_final_fixed_madc_file_for_review_archive(self) -> None:
+        fixed_file = _fixed_madc_result_file(
+            [
+                "sample_snpID_rename.csv",
+                "sample_snpID_rename_v1.csv",
+                "sample_snpID_rename_updatedSeq.csv",
+                "sample_snpID_rename_updatedSeq_v1.csv",
+                "panel_files/alfalfa/alfalfa_allele_db_v011.fa",
+            ]
+        )
+
+        self.assertEqual(fixed_file, "sample_snpID_rename_updatedSeq_v1.csv")
+
+    def test_writes_run_log_file_for_review_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            state = RunState(
+                run_id="run",
+                kind="MADC",
+                work_dir=work_dir,
+                input_files=set(),
+                command=[],
+                log=["one", "two"],
+            )
+
+            relative_log = _write_run_log_file(state)
+
+            self.assertEqual(relative_log, MADC_LOG_FILENAME)
+            self.assertEqual((work_dir / MADC_LOG_FILENAME).read_text(encoding="utf-8"), "one\ntwo\n")
 
 
 if __name__ == "__main__":

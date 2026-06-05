@@ -11,14 +11,18 @@ ENV HAPAPP_HOST=0.0.0.0 \
     PIXI_NO_PROGRESS=true \
     PYTHONUNBUFFERED=1
 
-COPY pixi.toml pixi.lock pyproject.toml README.md MANIFEST.in ./
+COPY pixi.toml pixi.lock ./
+
+RUN pixi install --locked --no-progress \
+    && pixi clean cache --yes
+
+COPY pyproject.toml README.md MANIFEST.in ./
 COPY assets ./assets
 COPY src ./src
 COPY vendor ./vendor
 COPY workflows ./workflows
 
-RUN pixi install --locked --no-progress \
-    && pixi clean cache --yes \
+RUN python -m pip install --no-deps . \
     && chmod +x workflows/*.sh
 
 EXPOSE 8050

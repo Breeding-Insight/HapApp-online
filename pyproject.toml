@@ -15,6 +15,7 @@ dependencies = [
   "dash-bootstrap-components",
   "dash-uploader>=0.6.1,<0.7",
   "pandas",
+  "python-dotenv",
 ]
 
 [project.scripts]

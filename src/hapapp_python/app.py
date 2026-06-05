@@ -15,11 +15,16 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from hapapp_python.env import load_env
+
+load_env()
+
 import dash_bootstrap_components as dbc
 import dash_uploader as du
 from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_update
 
 from hapapp_python.github_panel_files import resolve_madc_panel_files
+from hapapp_python.dropbox_archive import archive_madc_review_artifacts
 from hapapp_python.madc_workflow import build_madc_command, missing_madc_commands
 from hapapp_python.madc_validation import MADCValidationError, validate_raw_madc
 from hapapp_python.panels import (
@@ -41,6 +46,7 @@ MADC_MAIN_RESULT_PATTERN = re.compile(
     r"_snpID_rename_updatedSeq\.csv$|_snpID_rename\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
 )
 MADC_DB_VERSION_RE = re.compile(r"v(?P<version>\d{3})")
+MADC_LOG_FILENAME = "hapapp_madc_workflow.log"
 APP_NAME = "HapApp"
 
 
@@ -56,6 +62,8 @@ class RunState:
     status: str = "running"
     returncode: int | None = None
     files: list[str] = field(default_factory=list)
+    fixed_madc_file: str | None = None
+    log_file: str | None = None
     error: str | None = None
 
 
@@ -216,11 +224,65 @@ def _list_files(work_dir: Path, input_files: set[str]) -> list[str]:
     return sorted(files)
 
 
+def _write_run_log_file(state: RunState) -> str:
+    log_path = state.work_dir / MADC_LOG_FILENAME
+    log_path.write_text("\n".join(state.log).rstrip() + "\n", encoding="utf-8")
+    return MADC_LOG_FILENAME
+
+
+def _is_fixed_madc_result(file_path: str) -> bool:
+    if "/" in file_path or not file_path.endswith(".csv"):
+        return False
+    return "_snpID_rename" in file_path and re.search(r"_v[^/]*\.csv$", file_path) is not None
+
+
+def _fixed_madc_result_file(files: list[str]) -> str | None:
+    fixed_files = [file_path for file_path in files if _is_fixed_madc_result(file_path)]
+    if not fixed_files:
+        return None
+    updated_seq = [file_path for file_path in fixed_files if "_updatedSeq_" in file_path]
+    return sorted(updated_seq or fixed_files)[-1]
+
+
 def _append_log(run_id: str, line: str) -> None:
     with RUNS_LOCK:
         state = RUNS.get(run_id)
         if state:
             state.log.append(line.rstrip("\n"))
+
+
+def _append_log_lines(run_id: str | None, lines: list[str]) -> None:
+    if not run_id or not lines:
+        return
+    with RUNS_LOCK:
+        state = RUNS.get(run_id)
+        if state:
+            state.log.extend(line.rstrip("\n") for line in lines)
+
+
+def _refresh_run_log_file(run_id: str | None) -> None:
+    if not run_id:
+        return
+    with RUNS_LOCK:
+        state = RUNS.get(run_id)
+        if state:
+            state.log_file = _write_run_log_file(state)
+
+
+def _archive_run_results(run_id: str | None, *, include_fixed_madc: bool, include_log: bool) -> None:
+    _refresh_run_log_file(run_id)
+    state = _snapshot(run_id)
+    if state is None or state.status != "completed":
+        return
+    try:
+        messages = archive_madc_review_artifacts(
+            state,
+            include_fixed_madc=include_fixed_madc,
+            include_log=include_log,
+        )
+    except Exception as exc:  # noqa: BLE001 - archival should not block download/close.
+        messages = [f"Dropbox archive failed: {exc}"]
+    _append_log_lines(run_id, messages)
 
 
 def _run_process(run_id: str) -> None:
@@ -247,7 +309,9 @@ def _run_process(run_id: str) -> None:
         with RUNS_LOCK:
             state = RUNS[run_id]
             state.returncode = returncode
+            state.log_file = _write_run_log_file(state)
             state.files = _list_files(work_dir, input_files)
+            state.fixed_madc_file = _fixed_madc_result_file(state.files)
             state.status = "completed" if returncode == 0 else "failed"
             if returncode != 0:
                 state.error = f"Workflow exited with status {returncode}"
@@ -256,8 +320,9 @@ def _run_process(run_id: str) -> None:
             state = RUNS[run_id]
             state.status = "failed"
             state.error = str(exc)
-            state.files = _list_files(work_dir, input_files)
             state.log.append(f"[ERROR] {exc}")
+            state.log_file = _write_run_log_file(state)
+            state.files = _list_files(work_dir, input_files)
 
 
 def _start_run(
@@ -303,6 +368,8 @@ def _snapshot(run_id: str | None) -> RunState | None:
             status=state.status,
             returncode=state.returncode,
             files=list(state.files),
+            fixed_madc_file=state.fixed_madc_file,
+            log_file=state.log_file,
             error=state.error,
         )
 
@@ -759,6 +826,7 @@ def register_callbacks(app: Dash) -> None:
     )
     def toggle_madc_results_modal(_open_clicks, _close_clicks, run_id, _is_open):
         if ctx.triggered_id == "madc-results-close":
+            _archive_run_results(run_id, include_fixed_madc=False, include_log=True)
             return False, no_update, no_update, no_update, no_update, no_update, no_update
 
         state = _snapshot(run_id)
@@ -956,6 +1024,7 @@ def register_callbacks(app: Dash) -> None:
     def download_madc(_clicks, run_id, main_selected, diagnostic_selected):
         selected = list(dict.fromkeys((main_selected or []) + (diagnostic_selected or [])))
         try:
+            _archive_run_results(run_id, include_fixed_madc=True, include_log=True)
             return dcc.send_bytes(
                 _zip_selected(run_id, selected, default_all=False),
                 f"madc_results_{str(run_id)[:8]}.zip",

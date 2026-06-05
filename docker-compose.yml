@@ -1,0 +1,22 @@
+services:
+  hapapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DOCKER_PLATFORM: ${DOCKER_PLATFORM:-linux/amd64}
+    image: ${HAPAPP_IMAGE:-hapapp-online}:${HAPAPP_TAG:-local}
+    ports:
+      - "${HAPAPP_HOST_PORT:-8050}:8050"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8050/', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

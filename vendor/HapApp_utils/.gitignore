@@ -14,6 +14,7 @@
 *.idx
 *.dict
 *.fa
+!data/demo_panel/demo_allele_db_v001.fa
 *.fai
 *.gtf
 *.gff

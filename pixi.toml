@@ -7,16 +7,17 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 
 [dependencies]
 python = ">=3.11,<3.14"
+pip = "*"
 blast = "*"
 
 [pypi-dependencies]
-hapapp-online = { path = ".", editable = true }
 biopython = "*"
 cutadapt = "*"
 dash = "*"
 dash-bootstrap-components = "*"
 pandas = "*"
 dash-uploader = ">=0.6.1, <0.7"
+python-dotenv = "*"
 
 [tasks]
 hapapp-online = "hapapp-online"

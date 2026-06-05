@@ -1,0 +1,18 @@
+services:
+  hapapp:
+    container_name: hapapp-local
+    image: hapapp-online:local
+    command: python -m hapapp_python.app --no-open
+    environment:
+      PYTHONPATH: /app/src
+    volumes:
+      - ./config/local.env:/app/.env:ro
+      - ./src:/app/src:ro
+      - ./assets:/app/assets:ro
+      - ./workflows:/app/workflows:ro
+      - ./vendor:/app/vendor:ro
+      - hapapp-local-runs:/tmp/hapapp_online_runs
+    restart: "no"
+
+volumes:
+  hapapp-local-runs:
