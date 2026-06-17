@@ -93,9 +93,10 @@ def resolve_madc_panel_files(
     github_client: GitHubContentClient | None = None,
 ) -> ResolvedMADCPanel:
     """Copy any GitHub-backed panel files into this run's work directory."""
+    destination_dir = work_dir / "panel_files" / _safe_dir_name(panel.panel_id)
     if not _panel_uses_github(panel):
         validate_madc_panel_files(panel)
-        return _resolved_from_local_panel(panel)
+        return _resolved_from_local_panel(panel, destination_dir)
 
     token = github_token if github_token is not None else os.environ.get(GITHUB_TOKEN_ENV)
     if github_client is None:
@@ -105,7 +106,6 @@ def resolve_madc_panel_files(
             )
         github_client = GitHubContentsClient(token)
 
-    destination_dir = work_dir / "panel_files" / _safe_dir_name(panel.panel_id)
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     allele_db_base, matchcnt_lut_base = _resolve_base_pair(
@@ -139,6 +139,42 @@ def resolve_madc_panel_files(
     )
     validate_madc_panel_files(resolved)
     return resolved
+
+
+def resolve_madc_panel_lut(
+    panel: MADCPanel,
+    work_dir: Path,
+    *,
+    github_token: str | None = None,
+    github_client: GitHubContentClient | None = None,
+) -> Path:
+    """Resolve only the SNP ID LUT needed to identify an uploaded MADC."""
+    if isinstance(panel.snpid_lut, Path):
+        if not panel.snpid_lut.is_file():
+            raise PanelFileResolutionError(f"SNP ID LUT not found: {panel.snpid_lut}")
+        return panel.snpid_lut
+
+    token = github_token if github_token is not None else os.environ.get(GITHUB_TOKEN_ENV)
+    if github_client is None:
+        if not token:
+            raise PanelFileResolutionError(
+                f"Species panel {panel.label!r} uses a GitHub SNP ID LUT, but {GITHUB_TOKEN_ENV} is not set."
+            )
+        github_client = GitHubContentsClient(token)
+
+    destination_dir = work_dir / "panel_luts" / _safe_dir_name(panel.panel_id)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    return _resolve_single_file(panel.snpid_lut, "SNP ID LUT", destination_dir, github_client)
+
+
+def madc_panel_github_source(panel: MADCPanel) -> tuple[str | None, str | None]:
+    """Return the repository URL and configured ref used by a GitHub-backed panel."""
+    for file_ref in [panel.allele_db_indel, panel.allele_db_base, panel.snpid_lut]:
+        if not is_github_url(file_ref):
+            continue
+        github_ref = _parse_github_url(str(file_ref))
+        return f"https://github.com/{github_ref.owner}/{github_ref.repo}", github_ref.ref
+    return None, None
 
 
 def _resolve_base_pair(
@@ -289,16 +325,17 @@ def _panel_uses_github(panel: MADCPanel) -> bool:
     )
 
 
-def _resolved_from_local_panel(panel: MADCPanel) -> ResolvedMADCPanel:
+def _resolved_from_local_panel(panel: MADCPanel, destination_dir: Path) -> ResolvedMADCPanel:
+    destination_dir.mkdir(parents=True, exist_ok=True)
     return ResolvedMADCPanel(
         panel_id=panel.panel_id,
         label=panel.label,
-        snpid_lut=_local_path(panel.snpid_lut, "SNP ID LUT"),
-        allele_db_base=_local_path(panel.allele_db_base, "base allele DB FASTA"),
-        matchcnt_lut_base=_local_path(panel.matchcnt_lut_base, "base match-count LUT"),
-        allele_db_indel=_local_optional_path(panel.allele_db_indel, "indel allele DB FASTA"),
-        matchcnt_lut_indel=_local_optional_path(panel.matchcnt_lut_indel, "indel match-count LUT"),
-        dup_tags=_local_optional_path(panel.dup_tags, "duplicate-tags file"),
+        snpid_lut=_copy_local_file(panel.snpid_lut, "SNP ID LUT", destination_dir),
+        allele_db_base=_copy_local_file(panel.allele_db_base, "base allele DB FASTA", destination_dir),
+        matchcnt_lut_base=_copy_local_file(panel.matchcnt_lut_base, "base match-count LUT", destination_dir),
+        allele_db_indel=_copy_optional_local_file(panel.allele_db_indel, "indel allele DB FASTA", destination_dir),
+        matchcnt_lut_indel=_copy_optional_local_file(panel.matchcnt_lut_indel, "indel match-count LUT", destination_dir),
+        dup_tags=_copy_optional_local_file(panel.dup_tags, "duplicate-tags file", destination_dir),
         first_sample_col=panel.first_sample_col,
         design_len=panel.design_len,
         seq_len=panel.seq_len,
@@ -308,16 +345,19 @@ def _resolved_from_local_panel(panel: MADCPanel) -> ResolvedMADCPanel:
     )
 
 
-def _local_path(file_ref: PanelFileRef, label: str) -> Path:
+def _copy_local_file(file_ref: PanelFileRef, label: str, destination_dir: Path) -> Path:
     if not isinstance(file_ref, Path):
         raise PanelFileResolutionError(f"{label} must resolve to a local path before running the workflow.")
-    return file_ref
+    destination = destination_dir / file_ref.name
+    if file_ref.resolve() != destination.resolve():
+        shutil.copy2(file_ref, destination)
+    return destination
 
 
-def _local_optional_path(file_ref: PanelFileRef | None, label: str) -> Path | None:
+def _copy_optional_local_file(file_ref: PanelFileRef | None, label: str, destination_dir: Path) -> Path | None:
     if file_ref is None:
         return None
-    return _local_path(file_ref, label)
+    return _copy_local_file(file_ref, label, destination_dir)
 
 
 def _parse_github_url(url: str) -> GitHubContentRef:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -26,9 +27,11 @@ class DropboxArchiveError(RuntimeError):
 
 
 class MADCArchiveState(Protocol):
+    run_id: str
     work_dir: Path
     fixed_madc_file: str | None
     log_file: str | None
+    metadata_file: str | None
 
 
 @dataclass(frozen=True)
@@ -65,8 +68,14 @@ def archive_madc_review_artifacts(
         uploads.append(("fixed MADC", state.fixed_madc_file, resolved_config.madc_folder))
     if include_log and state.log_file:
         uploads.append(("MADC log", state.log_file, resolved_config.log_folder))
+    if include_log and state.metadata_file:
+        uploads.append(("MADC run metadata", state.metadata_file, resolved_config.log_folder))
     if not uploads:
         raise DropboxArchiveError("No requested MADC artifact is available to archive.")
+
+    run_id = _safe_run_id(state.run_id)
+    if not run_id:
+        raise DropboxArchiveError("A run ID is required to archive MADC artifacts.")
 
     client = DropboxClient(resolved_config.access_token)
     messages: list[str] = []
@@ -74,7 +83,7 @@ def archive_madc_review_artifacts(
         local_path = (state.work_dir / relative_file).resolve()
         if not local_path.is_file():
             raise DropboxArchiveError(f"{label} file is missing: {relative_file}")
-        dropbox_path = f"{folder}/{local_path.name}"
+        dropbox_path = f"{folder}/{_filename_with_run_id(local_path.name, run_id)}"
         client.upload(local_path, dropbox_path)
         messages.append(f"Archived {label} to Dropbox: {dropbox_path}")
     return messages
@@ -181,3 +190,12 @@ def _normalize_dropbox_file_path(path: str) -> str:
     if cleaned == "/":
         raise DropboxArchiveError("Dropbox destination path cannot be empty.")
     return cleaned
+
+
+def _safe_run_id(run_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", run_id).strip("_")
+
+
+def _filename_with_run_id(filename: str, run_id: str) -> str:
+    path = Path(filename)
+    return f"{path.stem}_{run_id}{path.suffix}"

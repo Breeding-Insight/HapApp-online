@@ -5,7 +5,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-ENV_FILE_NAME = ".env"
+ENV_FILES = (
+    Path("config") / "local.env",
+    Path("config") / "development.env",
+    Path("config") / "production.env",
+)
 HAPAPP_ENV_PREFIX = "HAPAPP_"
 
 _LOADED = False
@@ -19,7 +23,7 @@ def load_env() -> None:
     env_path = _find_env_file()
     if env_path is None:
         raise RuntimeError(
-            "Missing required .env file. Copy .env_example to .env and set the server configuration values."
+            "Missing required environment file. Copy config/local.env.example to config/local.env."
         )
 
     _clear_hapapp_environment()
@@ -28,9 +32,10 @@ def load_env() -> None:
 
 
 def _find_env_file() -> Path | None:
+    project_root = Path(__file__).resolve().parents[2]
     candidates = [
-        Path.cwd() / ENV_FILE_NAME,
-        Path(__file__).resolve().parents[2] / ENV_FILE_NAME,
+        *(Path.cwd() / env_file for env_file in ENV_FILES),
+        *(project_root / env_file for env_file in ENV_FILES),
     ]
     for candidate in candidates:
         if candidate.is_file():

@@ -9,15 +9,20 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 python = ">=3.11,<3.14"
 pip = "*"
 blast = "*"
+freetds = "*"
+unixodbc = "*"
 
 [pypi-dependencies]
 biopython = "*"
 cutadapt = "*"
 dash = "*"
 dash-bootstrap-components = "*"
+dash-iconify = "*"
 pandas = "*"
 dash-uploader = ">=0.6.1, <0.7"
 python-dotenv = "*"
+pyodbc = "*"
+requests = "*"
 
 [tasks]
 hapapp-online = "hapapp-online"

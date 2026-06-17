@@ -8,7 +8,9 @@ from typing import Any
 from hapapp_python.github_panel_files import (
     GitHubContentRef,
     PanelFileResolutionError,
+    madc_panel_github_source,
     resolve_madc_panel_files,
+    resolve_madc_panel_lut,
 )
 from hapapp_python.panels import MADCPanel
 
@@ -63,9 +65,16 @@ def _github_panel(**overrides: object) -> MADCPanel:
 
 
 class GitHubPanelFileTests(unittest.TestCase):
-    def test_resolves_local_panel_without_panel_files_directory(self) -> None:
+    def test_reports_github_repository_and_ref_for_submission_provenance(self) -> None:
+        self.assertEqual(
+            madc_panel_github_source(_github_panel()),
+            ("https://github.com/example/private-panel", "main"),
+        )
+
+    def test_copies_local_panel_files_to_run_work_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
+            work_dir = tmp_path / "work"
             snpid_lut = tmp_path / "snpid_lut.csv"
             allele_db = tmp_path / "allele_db.fa"
             matchcnt_lut = tmp_path / "matchcnt_lut.txt"
@@ -80,11 +89,16 @@ class GitHubPanelFileTests(unittest.TestCase):
                     design_len=59,
                     seq_len=59,
                 ),
-                tmp_path / "work",
+                work_dir,
             )
 
-        self.assertEqual(resolved.snpid_lut, snpid_lut)
-        self.assertEqual(resolved.allele_db_base, allele_db)
+            expected_dir = work_dir / "panel_files" / "alfalfa"
+            self.assertEqual(resolved.snpid_lut, expected_dir / "snpid_lut.csv")
+            self.assertEqual(resolved.allele_db_base, expected_dir / "allele_db.fa")
+            self.assertEqual(resolved.matchcnt_lut_base, expected_dir / "matchcnt_lut.txt")
+            self.assertTrue(resolved.snpid_lut.is_file())
+            self.assertTrue(resolved.allele_db_base.is_file())
+            self.assertTrue(resolved.matchcnt_lut_base.is_file())
 
     def test_downloads_github_panel_files_to_run_work_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -102,6 +116,16 @@ class GitHubPanelFileTests(unittest.TestCase):
             )
             self.assertTrue(resolved.snpid_lut.is_file())
             self.assertTrue(all(path.is_relative_to(expected_dir) for path in client.downloads))
+
+    def test_resolves_only_github_lut_for_panel_identification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir) / "work"
+            client = FakeGitHubClient()
+
+            lut = resolve_madc_panel_lut(_github_panel(), work_dir, github_client=client)
+
+            self.assertEqual(lut, work_dir / "panel_luts" / "alfalfa" / "snpid_lut.csv")
+            self.assertEqual(client.downloads, [lut])
 
     def test_requires_token_when_no_client_is_injected_for_github_panel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

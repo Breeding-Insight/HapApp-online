@@ -12,7 +12,8 @@ import hapapp_python.env as app_env
 class EnvTests(unittest.TestCase):
     def test_loads_dotenv_file_from_current_working_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            env_path = Path(tmp_dir) / ".env"
+            env_path = Path(tmp_dir) / "config" / "local.env"
+            env_path.parent.mkdir()
             env_path.write_text(
                 "\n".join(
                     [
@@ -35,7 +36,9 @@ class EnvTests(unittest.TestCase):
 
     def test_dotenv_values_replace_existing_hapapp_environment_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            (Path(tmp_dir) / ".env").write_text("HAPAPP_PORT=9999\n", encoding="utf-8")
+            env_path = Path(tmp_dir) / "config" / "local.env"
+            env_path.parent.mkdir()
+            env_path.write_text("HAPAPP_PORT=9999\n", encoding="utf-8")
 
             with patch.object(app_env, "_LOADED", False), patch.dict(
                 os.environ,
@@ -54,7 +57,7 @@ class EnvTests(unittest.TestCase):
 
     def test_raises_when_dotenv_file_is_missing(self) -> None:
         with patch.object(app_env, "_LOADED", False), patch("hapapp_python.env._find_env_file", return_value=None):
-            with self.assertRaisesRegex(RuntimeError, "Missing required .env file"):
+            with self.assertRaisesRegex(RuntimeError, "Missing required environment file"):
                 app_env.load_env()
 
 

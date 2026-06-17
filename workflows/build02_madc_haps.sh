@@ -103,6 +103,22 @@ else
     MATCHCNT_LUT_PATH="$MATCHCNT_LUT_BASE_PATH"
 fi
 
+SOURCE_ALLELE_DB_DIR="$(cd "$(dirname "$ALLELE_DB_PATH")" && pwd -P)"
+PANEL_WORK_DIR="$WORK_DIR/panel_files/$(basename "$SOURCE_ALLELE_DB_DIR")"
+mkdir -p "$PANEL_WORK_DIR"
+
+STAGED_ALLELE_DB_PATH="$PANEL_WORK_DIR/$(basename "$ALLELE_DB_PATH")"
+if [[ "$(cd "$(dirname "$ALLELE_DB_PATH")" && pwd -P)/$(basename "$ALLELE_DB_PATH")" != "$(cd "$(dirname "$STAGED_ALLELE_DB_PATH")" && pwd -P)/$(basename "$STAGED_ALLELE_DB_PATH")" ]]; then
+    cp -p "$ALLELE_DB_PATH" "$STAGED_ALLELE_DB_PATH"
+fi
+ALLELE_DB_PATH="$STAGED_ALLELE_DB_PATH"
+
+STAGED_MATCHCNT_LUT_PATH="$PANEL_WORK_DIR/$(basename "$MATCHCNT_LUT_PATH")"
+if [[ "$(cd "$(dirname "$MATCHCNT_LUT_PATH")" && pwd -P)/$(basename "$MATCHCNT_LUT_PATH")" != "$(cd "$(dirname "$STAGED_MATCHCNT_LUT_PATH")" && pwd -P)/$(basename "$STAGED_MATCHCNT_LUT_PATH")" ]]; then
+    cp -p "$MATCHCNT_LUT_PATH" "$STAGED_MATCHCNT_LUT_PATH"
+fi
+MATCHCNT_LUT_PATH="$STAGED_MATCHCNT_LUT_PATH"
+
 ALLELE_DB_DIR="$(cd "$(dirname "$ALLELE_DB_PATH")" && pwd -P)"
 ALLELE_DB="$(basename "$ALLELE_DB_PATH")"
 MATCHCNT_LUT="$(basename "$MATCHCNT_LUT_PATH")"

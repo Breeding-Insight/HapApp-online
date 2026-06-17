@@ -6,7 +6,7 @@ services:
     environment:
       PYTHONPATH: /app/src
     volumes:
-      - ./config/local.env:/app/.env:ro
+      - ./config/local.env:/app/config/local.env:ro
       - ./src:/app/src:ro
       - ./assets:/app/assets:ro
       - ./workflows:/app/workflows:ro

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from hapapp_python.panels import MADCPanel, is_github_url, load_madc_panels, validate_madc_panel_files
 from hapapp_python.paths import PROJECT_ROOT
@@ -32,7 +33,12 @@ code_ver = "v1"
 
 class MADCPanelTests(unittest.TestCase):
     def test_loads_bundled_demo_panel(self) -> None:
-        panels = load_madc_panels()
+        with patch.dict(
+            "os.environ",
+            {"HAPAPP_TEST_ALFALFA_PANEL_REPO": "https://github.com/example/test_alfalfa_haplotype_db"},
+            clear=False,
+        ):
+            panels = load_madc_panels()
 
         self.assertIn("demo", panels)
         self.assertEqual(panels["demo"].label, "Demo panel (bundled example)")
@@ -75,6 +81,32 @@ code_ver = "v1"
         self.assertEqual(panel.snpid_lut, snpid_lut)
         self.assertTrue(is_github_url(panel.snpid_lut))
         self.assertEqual(panel.allele_db_base, allele_db)
+
+    def test_expands_environment_variables_in_panel_file_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "panels.toml"
+            config_path.write_text(
+                _panel_toml().replace("relative", "${TEST_PANEL_REPO}/tree/main"),
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {"TEST_PANEL_REPO": "https://github.com/example/panel"}, clear=False):
+                panel = load_madc_panels(config_path)["demo"]
+
+        self.assertEqual(panel.snpid_lut, "https://github.com/example/panel/tree/main/demo_snpID_lut.csv")
+
+    def test_reports_missing_panel_environment_variables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "panels.toml"
+            config_path.write_text(
+                _panel_toml().replace("relative", "${MISSING_PANEL_REPO}"),
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {}, clear=True), self.assertRaises(ValueError) as err:
+                load_madc_panels(config_path)
+
+        self.assertIn("MISSING_PANEL_REPO", str(err.exception))
 
     def test_rejects_missing_required_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

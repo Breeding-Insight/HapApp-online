@@ -3,7 +3,7 @@ services:
     container_name: hapapp-development
     image: hapapp-online:development
     volumes:
-      - ./config/development.env:/app/.env:ro
+      - ./config/development.env:/app/config/development.env:ro
       - hapapp-development-runs:/tmp/hapapp_online_runs
     restart: unless-stopped
 

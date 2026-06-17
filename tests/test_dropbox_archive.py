@@ -26,9 +26,11 @@ class FakeDropboxClient:
 
 class FakeState:
     def __init__(self, work_dir: Path) -> None:
+        self.run_id = "run-123"
         self.work_dir = work_dir
-        self.fixed_madc_file = "run_snpID_rename_v1.csv"
+        self.fixed_madc_file = "DAl22-7249_MADC_snpID_rename_updatedSeq_v1.csv"
         self.log_file = "hapapp_madc_workflow.log"
+        self.metadata_file = "hapapp_madc_run_metadata.json"
 
 
 class DropboxArchiveTests(unittest.TestCase):
@@ -64,8 +66,9 @@ class DropboxArchiveTests(unittest.TestCase):
     def test_archives_fixed_madc_and_log_to_separate_folders(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             work_dir = Path(tmp_dir)
-            (work_dir / "run_snpID_rename_v1.csv").write_text("madc", encoding="utf-8")
+            (work_dir / "DAl22-7249_MADC_snpID_rename_updatedSeq_v1.csv").write_text("madc", encoding="utf-8")
             (work_dir / "hapapp_madc_workflow.log").write_text("log", encoding="utf-8")
+            (work_dir / "hapapp_madc_run_metadata.json").write_text("{}", encoding="utf-8")
 
             with patch("hapapp_python.dropbox_archive.DropboxClient", FakeDropboxClient):
                 messages = archive_madc_review_artifacts(
@@ -76,23 +79,32 @@ class DropboxArchiveTests(unittest.TestCase):
         self.assertEqual(
             [(path.name, dropbox_path) for path, dropbox_path in FakeDropboxClient.uploads],
             [
-                ("run_snpID_rename_v1.csv", "/review/run_snpID_rename_v1.csv"),
-                ("hapapp_madc_workflow.log", "/logs/hapapp_madc_workflow.log"),
+                (
+                    "DAl22-7249_MADC_snpID_rename_updatedSeq_v1.csv",
+                    "/review/DAl22-7249_MADC_snpID_rename_updatedSeq_v1_run-123.csv",
+                ),
+                ("hapapp_madc_workflow.log", "/logs/hapapp_madc_workflow_run-123.log"),
+                ("hapapp_madc_run_metadata.json", "/logs/hapapp_madc_run_metadata_run-123.json"),
             ],
         )
         self.assertEqual(
             messages,
             [
-                "Archived fixed MADC to Dropbox: /review/run_snpID_rename_v1.csv",
-                "Archived MADC log to Dropbox: /logs/hapapp_madc_workflow.log",
+                (
+                    "Archived fixed MADC to Dropbox: "
+                    "/review/DAl22-7249_MADC_snpID_rename_updatedSeq_v1_run-123.csv"
+                ),
+                "Archived MADC log to Dropbox: /logs/hapapp_madc_workflow_run-123.log",
+                "Archived MADC run metadata to Dropbox: /logs/hapapp_madc_run_metadata_run-123.json",
             ],
         )
 
     def test_can_archive_only_log_for_cancel_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             work_dir = Path(tmp_dir)
-            (work_dir / "run_snpID_rename_v1.csv").write_text("madc", encoding="utf-8")
+            (work_dir / "DAl22-7249_MADC_snpID_rename_updatedSeq_v1.csv").write_text("madc", encoding="utf-8")
             (work_dir / "hapapp_madc_workflow.log").write_text("log", encoding="utf-8")
+            (work_dir / "hapapp_madc_run_metadata.json").write_text("{}", encoding="utf-8")
 
             with patch("hapapp_python.dropbox_archive.DropboxClient", FakeDropboxClient):
                 messages = archive_madc_review_artifacts(
@@ -104,9 +116,18 @@ class DropboxArchiveTests(unittest.TestCase):
 
         self.assertEqual(
             [(path.name, dropbox_path) for path, dropbox_path in FakeDropboxClient.uploads],
-            [("hapapp_madc_workflow.log", "/logs/hapapp_madc_workflow.log")],
+            [
+                ("hapapp_madc_workflow.log", "/logs/hapapp_madc_workflow_run-123.log"),
+                ("hapapp_madc_run_metadata.json", "/logs/hapapp_madc_run_metadata_run-123.json"),
+            ],
         )
-        self.assertEqual(messages, ["Archived MADC log to Dropbox: /logs/hapapp_madc_workflow.log"])
+        self.assertEqual(
+            messages,
+            [
+                "Archived MADC log to Dropbox: /logs/hapapp_madc_workflow_run-123.log",
+                "Archived MADC run metadata to Dropbox: /logs/hapapp_madc_run_metadata_run-123.json",
+            ],
+        )
 
 
 if __name__ == "__main__":

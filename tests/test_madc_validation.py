@@ -4,7 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hapapp_python.madc_validation import MADCValidationError, validate_raw_madc
+from hapapp_python.madc_validation import (
+    MADCPanelCandidate,
+    MADCPanelIdentificationError,
+    MADCValidationError,
+    identify_raw_madc_panel,
+    validate_madc_filename,
+    validate_raw_madc,
+)
 
 RAW_MADC_METADATA_COLUMNS = (
     "AlleleID",
@@ -101,6 +108,37 @@ def _panel_lut_for_marker_ids(marker_ids: list[str], header: str = "Panel_marker
 
 
 class MADCValidationTests(unittest.TestCase):
+    def test_accepts_dart_formal_id_variations_in_madc_filename(self) -> None:
+        scenarios = {
+            "DAl22-7249_MADC.csv": "DAl22-7249",
+            "prefix_DWh23_123_suffix.csv": "DWh23_123",
+            "project_DSoy24-123456_raw_MADC.csv": "DSoy24-123456",
+            "DCnut25-10895_MADC.csv": "DCnut25-10895",
+            "DVeryLongSpeciesCode26-4567_MADC.csv": "DVeryLongSpeciesCode26-4567",
+            "D26_4567_MADC.csv": "D26_4567",
+        }
+
+        for filename, expected_id in scenarios.items():
+            with self.subTest(filename=filename):
+                self.assertEqual(validate_madc_filename(filename), expected_id)
+
+    def test_rejects_madc_filename_without_correct_dart_formal_id(self) -> None:
+        invalid_filenames = [
+            "raw_MADC.csv",
+            "DAl2-7249_MADC.csv",
+            "DAl22.7249_MADC.csv",
+            "DAl22-72_MADC.csv",
+            "DAl22-1234567_MADC.csv",
+        ]
+
+        for filename in invalid_filenames:
+            with self.subTest(filename=filename), self.assertRaises(MADCValidationError) as err:
+                validate_madc_filename(filename)
+
+            message = str(err.exception)
+            self.assertIn("DArT formal ID", message)
+            self.assertIn("DAl22-7249_MADC.csv", message)
+
     def test_detects_row_8_raw_header(self) -> None:
         content = "\n".join(
             [
@@ -309,6 +347,84 @@ class MADCValidationTests(unittest.TestCase):
                 validate_raw_madc(madc, first_sample_col=17, panel_lut_path=lut)
 
         self.assertIn("Panel_markerID", str(err.exception))
+
+    def test_identifies_unique_best_panel_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            madc = tmp_path / "raw_madc.csv"
+            exact_lut = tmp_path / "exact_lut.csv"
+            partial_lut = tmp_path / "partial_lut.csv"
+            madc.write_text(_raw_madc_for_clone_ids(["marker1", "marker2", "marker3"]), encoding="utf-8")
+            exact_lut.write_text(_panel_lut_for_marker_ids(["marker1", "marker2", "marker3"]), encoding="utf-8")
+            partial_lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
+
+            result = identify_raw_madc_panel(
+                madc,
+                [
+                    MADCPanelCandidate("exact", "Exact panel", exact_lut),
+                    MADCPanelCandidate("partial", "Partial panel", partial_lut),
+                ],
+            )
+
+        self.assertEqual(result.panel_id, "exact")
+        self.assertEqual(result.check.n_clone_ids_missing_from_panel, 0)
+
+    def test_panel_identification_prefers_smallest_containing_panel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            madc = tmp_path / "raw_madc.csv"
+            small_lut = tmp_path / "small_lut.csv"
+            large_lut = tmp_path / "large_lut.csv"
+            madc.write_text(_raw_madc_for_clone_ids(["marker1"]), encoding="utf-8")
+            small_lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
+            large_lut.write_text(_panel_lut_for_marker_ids(["marker1", "marker2", "marker3"]), encoding="utf-8")
+
+            result = identify_raw_madc_panel(
+                madc,
+                [
+                    MADCPanelCandidate("small", "Small panel", small_lut),
+                    MADCPanelCandidate("large", "Large panel", large_lut),
+                ],
+            )
+
+        self.assertEqual(result.panel_id, "small")
+
+    def test_panel_identification_rejects_no_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            madc = tmp_path / "raw_madc.csv"
+            lut = tmp_path / "panel_lut.csv"
+            madc.write_text(_raw_madc_for_clone_ids(["marker1", "marker2"]), encoding="utf-8")
+            lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
+
+            with self.assertRaises(MADCPanelIdentificationError) as err:
+                identify_raw_madc_panel(
+                    madc,
+                    [MADCPanelCandidate("other", "Other panel", lut)],
+                )
+
+        self.assertIn("does not match any available species panel", str(err.exception))
+
+    def test_panel_identification_rejects_ambiguous_best_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            madc = tmp_path / "raw_madc.csv"
+            first_lut = tmp_path / "first_lut.csv"
+            second_lut = tmp_path / "second_lut.csv"
+            madc.write_text(_raw_madc_for_clone_ids(["marker1"]), encoding="utf-8")
+            first_lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
+            second_lut.write_text(_panel_lut_for_marker_ids(["marker1"]), encoding="utf-8")
+
+            with self.assertRaises(MADCPanelIdentificationError) as err:
+                identify_raw_madc_panel(
+                    madc,
+                    [
+                        MADCPanelCandidate("first", "First panel", first_lut),
+                        MADCPanelCandidate("second", "Second panel", second_lut),
+                    ],
+                )
+
+        self.assertIn("matches multiple species panels equally", str(err.exception))
 
 
 if __name__ == "__main__":

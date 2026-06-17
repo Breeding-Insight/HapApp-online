@@ -13,9 +13,12 @@ dependencies = [
   "cutadapt",
   "dash",
   "dash-bootstrap-components",
+  "dash-iconify",
   "dash-uploader>=0.6.1,<0.7",
   "pandas",
+  "pyodbc",
   "python-dotenv",
+  "requests",
 ]
 
 [project.scripts]

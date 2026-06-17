@@ -4,9 +4,9 @@ import csv
 import re
 from collections import Counter
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Iterator, TextIO
+from typing import Iterable, Iterator, TextIO
 
 MISSING = {"", "NA", "N/A", "NULL", "null", "NaN", "nan"}
 RAW_PREAMBLE = {"", "*"}
@@ -45,6 +45,9 @@ FIXED_TMP_RE = re.compile(r"_tmp_\d{4}$")
 LOWERCASE_BASE_RE = re.compile(r"[atcg]")
 NON_ATCG_DASH_RE = re.compile(r"[^ATCG-]", flags=re.IGNORECASE)
 
+DART_FORMAL_ID_RE = re.compile(r"D[A-Za-z]*\d{2}[-_]\d{3,6}(?!\d)")
+DART_FORMAL_ID_FORMAT = "D<optional species letters><2-digit year>-<3-6 digit project number>"
+
 
 @dataclass(frozen=True)
 class MADCCheckResult:
@@ -58,9 +61,25 @@ class MADCCheckResult:
     n_ref_rows: int
     n_alt_rows: int
     n_other_rows: int
+    clone_ids: frozenset[str] = field(default_factory=frozenset, repr=False)
     n_panel_marker_ids: int | None = None
     n_clone_ids_missing_from_panel: int = 0
     warnings: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class MADCPanelCandidate:
+    panel_id: str
+    label: str
+    panel_lut_path: str | Path
+    first_sample_col: int = 17
+
+
+@dataclass(frozen=True)
+class MADCPanelIdentification:
+    panel_id: str
+    label: str
+    check: MADCCheckResult
 
 
 class MADCValidationError(ValueError):
@@ -75,6 +94,93 @@ class MADCValidationError(ValueError):
             message += "\nWarnings:\n" + "\n".join(f"- {warning}" for warning in self.warnings)
 
         super().__init__(message)
+
+
+class MADCPanelIdentificationError(ValueError):
+    """Raised when a raw MADC cannot be assigned to one configured panel."""
+
+
+def validate_madc_filename(filename: str | Path) -> str:
+    """Return the DArT formal ID from a valid MADC filename."""
+    name = Path(filename).name
+    match = DART_FORMAL_ID_RE.search(name)
+    if match:
+        return match.group(0)
+
+    raise MADCValidationError(
+        [
+            f"The MADC filename must contain a DArT formal ID in the format {DART_FORMAL_ID_FORMAT}. "
+            "Use '-' or '_' before the project number. Example: DAl22-7249_MADC.csv."
+        ]
+    )
+
+
+def identify_raw_madc_panel(
+    path: str | Path,
+    candidates: Iterable[MADCPanelCandidate],
+    *,
+    max_missing_panel_clone_ids: int = 0,
+) -> MADCPanelIdentification:
+    """Identify the unique panel containing every CloneID in a raw MADC upload."""
+    candidates = tuple(candidates)
+    if not candidates:
+        raise MADCPanelIdentificationError("No species panels are available for MADC identification.")
+
+    # Report structural MADC problems directly instead of disguising them as a
+    # panel mismatch.
+    base_check = validate_raw_madc(path, first_sample_col=candidates[0].first_sample_col)
+
+    matches: list[MADCPanelIdentification] = []
+    for candidate in candidates:
+        try:
+            panel_marker_ids = _load_panel_marker_ids(candidate.panel_lut_path)
+        except MADCValidationError:
+            continue
+        missing_panel_clone_ids = sorted(base_check.clone_ids - panel_marker_ids)
+        if len(missing_panel_clone_ids) > max_missing_panel_clone_ids:
+            continue
+
+        warnings = list(base_check.warnings)
+        if missing_panel_clone_ids:
+            warnings.append(
+                f"{len(missing_panel_clone_ids)} CloneID(s) from the raw MADC are missing from the selected "
+                f"panel LUT {PANEL_MARKER_ID_COLUMN} column. Examples: {missing_panel_clone_ids[:10]}."
+            )
+        check = replace(
+            base_check,
+            n_panel_marker_ids=len(panel_marker_ids),
+            n_clone_ids_missing_from_panel=len(missing_panel_clone_ids),
+            warnings=tuple(warnings),
+        )
+        matches.append(MADCPanelIdentification(candidate.panel_id, candidate.label, check))
+
+    if not matches:
+        raise MADCPanelIdentificationError(
+            "The uploaded MADC file does not match any available species panel."
+        )
+
+    fewest_missing = min(match.check.n_clone_ids_missing_from_panel for match in matches)
+    best_matches = [
+        match for match in matches if match.check.n_clone_ids_missing_from_panel == fewest_missing
+    ]
+    # A small MADC may be contained by multiple related panels. Prefer the
+    # smallest containing LUT because it is the most specific match.
+    fewest_extra_markers = min(
+        (match.check.n_panel_marker_ids or 0) - match.check.n_clone_ids
+        for match in best_matches
+    )
+    best_matches = [
+        match
+        for match in best_matches
+        if (match.check.n_panel_marker_ids or 0) - match.check.n_clone_ids == fewest_extra_markers
+    ]
+    if len(best_matches) > 1:
+        labels = ", ".join(match.label for match in best_matches)
+        raise MADCPanelIdentificationError(
+            f"The uploaded MADC file matches multiple species panels equally: {labels}. "
+            "Panel identification must be unambiguous."
+        )
+    return best_matches[0]
 
 
 def validate_raw_madc(
@@ -342,6 +448,7 @@ def validate_raw_madc(
         n_ref_rows=scan["n_ref_rows"],
         n_alt_rows=scan["n_alt_rows"],
         n_other_rows=scan["n_other_rows"],
+        clone_ids=frozenset(scan["clone_ids"]),
         n_panel_marker_ids=n_panel_marker_ids,
         n_clone_ids_missing_from_panel=n_clone_ids_missing_from_panel,
         warnings=tuple(warnings),

@@ -6,6 +6,7 @@ import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from string import Template
 from typing import Any
 from urllib.parse import urlparse
 
@@ -166,7 +167,7 @@ def _panel_string(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) 
 
 
 def _panel_file_ref(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> PanelFileRef:
-    return _resolve_panel_file_ref(_panel_string(raw_panel, field_name, panel_id))
+    return _resolve_panel_file_ref(_expand_panel_env_vars(_panel_string(raw_panel, field_name, panel_id), panel_id))
 
 
 def _panel_optional_file_ref(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> PanelFileRef | None:
@@ -175,7 +176,14 @@ def _panel_optional_file_ref(raw_panel: Mapping[str, Any], field_name: str, pane
         return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"MADC panel {panel_id!r} has invalid optional path {field_name!r}.")
-    return _resolve_panel_file_ref(value.strip())
+    return _resolve_panel_file_ref(_expand_panel_env_vars(value.strip(), panel_id))
+
+
+def _expand_panel_env_vars(value: str, panel_id: str) -> str:
+    try:
+        return Template(value).substitute(os.environ)
+    except KeyError as exc:
+        raise ValueError(f"MADC panel {panel_id!r} requires environment variable {exc.args[0]!r}.") from exc
 
 
 def _resolve_panel_file_ref(value: str) -> PanelFileRef:

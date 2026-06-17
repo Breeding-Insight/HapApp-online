@@ -33,11 +33,17 @@ Pixi installs the Python app dependencies plus the command-line bioinformatics t
 
 ## Configuration
 
-Copy `.env_example` to `.env` on the machine and fill in deployment-specific values. The online app requires `.env` at startup and uses it as the source of HapApp configuration.
+For local development, copy the example environment file:
+
+```bash
+cp config/local.env.example config/local.env
+```
+
+Both Pixi and local Docker Compose read `config/local.env`. Deployed VM environments use `config/development.env` and `config/production.env` (copy from the corresponding `.example` files).
 
 ## Docker Compose
 
-Compose builds the docker image and mounts an environment-specific file as `/app/.env`. The app should keep `HAPAPP_PORT=8050` inside each mounted env file; set `HAPAPP_HOST_PORT` before running Compose if the host should expose a different port.
+Compose builds the docker image and mounts the selected environment-specific file under `/app/config/`. The app should keep `HAPAPP_PORT=8050` inside each mounted env file; set `HAPAPP_HOST_PORT` before running Compose if the host should expose a different port.
 
 Local Docker development, with source directories mounted into the container:
 
@@ -62,13 +68,13 @@ docker compose -f docker-compose.yml -f docker-compose.production.yml up --build
 
 ## Workflow
 
-`MADC Hap Assignment` accepts an uploaded raw DArT/MADC report and a species panel selection. The selected panel supplies the SNP ID LUT, allele DB FASTA, match-count LUT, optional indel/duplicate-tag files, and workflow parameters from `src/hapapp_python/panels.toml`. This workflow is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
+`MADC Hap Assignment` accepts an uploaded raw DArT/MADC report and automatically identifies its species panel by matching every MADC CloneID against the configured panel SNP ID LUTs. Uploads that do not uniquely match an available panel are blocked. The identified panel supplies the SNP ID LUT, allele DB FASTA, match-count LUT, optional indel/duplicate-tag files, and workflow parameters from `src/hapapp_python/panels.toml`. This workflow is used to assign fixed allele IDs, pre-process the MADC file for quality, and update the microhaplotype fasta db as needed with novel unique microhaplotypes.
 
 The bundled `Demo panel (bundled example)` points at small example files in `vendor/HapApp_utils/data/demo_panel` and can be paired with `vendor/HapApp_utils/data/demo_panel/demo_raw_MADC.csv` for UI testing and Docker demonstrations. The demo panel is not a production allele database.
 
 Species panels can also point at private GitHub `blob` or `tree` URLs. Set `HAPAPP_GITHUB_TOKEN` before using those panels. GitHub-backed panel files are downloaded fresh into that run's temp work directory under `panel_files/`, so one run cannot reuse or contaminate the next run's panel inputs.
 
-When a completed MADC run's results modal is closed with `Cancel`, HapApp archives the workflow log to Dropbox. When `Download Selected` is clicked, HapApp archives both the final fixed-allele-ID MADC and the workflow log before returning the ZIP download. Set `HAPAPP_DROPBOX_ACCESS_TOKEN` to enable the archive. Optional destination folders can be customized with `HAPAPP_DROPBOX_MADC_FOLDER` and `HAPAPP_DROPBOX_LOG_FOLDER`; by default they are `/HapApp/MADC review` and `/HapApp/MADC logs`.
+When a completed MADC run's results modal opens, it displays the recognized-accession and new-allele summary and requires a submission decision. `Decline` archives the workflow log and completed-run metadata, then permanently blocks result viewing and downloading for that run. `Submit and Download` opens a confirmation showing the submitter, project contact, database versions, files to download, accessions, and new alleles. Confirming archives the final fixed-allele-ID MADC, workflow log, and metadata, records the run as submitted for review, and returns the selected files. Submitted runs may be viewed and downloaded again without repeating the archive action. Set `HAPAPP_DROPBOX_ACCESS_TOKEN` to enable the archive. Optional destination folders can be customized with `HAPAPP_DROPBOX_MADC_FOLDER` and `HAPAPP_DROPBOX_LOG_FOLDER`; by default they are `/HapApp/MADC review` and `/HapApp/MADC logs`.
 
 Each run creates a session-specific directory under the system temp directory. Result ZIP downloads are built from that run directory. The vendored `vendor/HapApp_utils/data` directory is not used for run outputs.
 

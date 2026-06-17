@@ -3,7 +3,7 @@ services:
     container_name: hapapp-production
     image: hapapp-online:production
     volumes:
-      - ./config/production.env:/app/.env:ro
+      - ./config/production.env:/app/config/production.env:ro
       - hapapp-production-runs:/tmp/hapapp_online_runs
     restart: unless-stopped
 
