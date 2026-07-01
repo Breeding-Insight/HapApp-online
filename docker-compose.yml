@@ -12,7 +12,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8050/', timeout=3)",
+          "import ssl, urllib.request; from hapapp_python.env import load_env; load_env(); from hapapp_python import config; scheme = 'https' if config.SSL_CONTEXT else 'http'; context = ssl._create_unverified_context() if config.SSL_CONTEXT else None; urllib.request.urlopen(f'{scheme}://127.0.0.1:{config.APP_PORT}/', context=context, timeout=3)",
         ]
       interval: 30s
       timeout: 5s

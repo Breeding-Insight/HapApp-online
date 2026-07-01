@@ -8,6 +8,32 @@ from pathlib import Path
 
 
 class ConfigTests(unittest.TestCase):
+    def test_tls_enabled_sets_ssl_context(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        env = {
+            **os.environ,
+            "TLS_ENABLED": "1",
+            "TLS_CERT_PATH": "/example/cert.pem",
+            "TLS_KEY_PATH": "/example/key.pem",
+            "PYTHONPATH": str(project_root / "src"),
+        }
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from hapapp_python import config; print(config.SSL_CONTEXT)",
+            ],
+            cwd=project_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("('/example/cert.pem', '/example/key.pem')", result.stdout)
+
     def test_local_auth_bypass_fails_closed_outside_local_dev(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         env = {

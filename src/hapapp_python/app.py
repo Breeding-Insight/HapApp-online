@@ -2378,9 +2378,10 @@ def main() -> None:
     RUN_BASE.mkdir(parents=True, exist_ok=True)
     app = create_app()
     if not args.no_open:
-        app_url = f"{config.PUBLIC_URL}/app/" if config.PUBLIC_URL else f"http://{args.host}:{args.port}/app/"
+        scheme = "https" if config.SSL_CONTEXT else "http"
+        app_url = f"{config.PUBLIC_URL}/app/" if config.PUBLIC_URL else f"{scheme}://{args.host}:{args.port}/app/"
         threading.Timer(1.0, webbrowser.open, args=[app_url]).start()
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    app.run(host=args.host, port=args.port, debug=args.debug, ssl_context=config.SSL_CONTEXT)
 
 
 if __name__ == "__main__":

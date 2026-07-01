@@ -25,9 +25,15 @@ COPY workflows ./workflows
 RUN python -m pip install --no-deps . \
     && chmod +x workflows/*.sh
 
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
+    && chown -R app:app /app
+
 EXPOSE 8050
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('HAPAPP_PORT', '8050') + '/', timeout=3)"
+    CMD python -c "import ssl, urllib.request; from hapapp_python.env import load_env; load_env(); from hapapp_python import config; scheme = 'https' if config.SSL_CONTEXT else 'http'; context = ssl._create_unverified_context() if config.SSL_CONTEXT else None; urllib.request.urlopen(f'{scheme}://127.0.0.1:{config.APP_PORT}/', context=context, timeout=3)"
+
+USER app
 
 CMD ["hapapp-online", "--no-open"]

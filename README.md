@@ -45,6 +45,8 @@ Both Pixi and local Docker Compose read `config/local.env`. Deployed VM environm
 
 Compose builds the docker image and mounts the selected environment-specific file under `/app/config/`. The app keeps Dash's internal `HAPAPP_PORT=8050` inside each mounted env file. The Compose overlays publish different VM host ports: local `8050`, development `5050`, and production `5081`.
 
+Development and production Compose overlays also mount the VM TLS certificate and key at `/cert.pem` and `/key.pem`. Keep `TLS_ENABLED=true`, `TLS_CERT_PATH=/cert.pem`, and `TLS_KEY_PATH=/key.pem` in the deployed env file for end-to-end HTTPS inside the container. The container runs as UID/GID `10001`, so the mounted key must be readable by that runtime user or group.
+
 Local Docker development, with source directories mounted into the container:
 
 ```bash

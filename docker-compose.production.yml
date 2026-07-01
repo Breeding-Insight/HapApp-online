@@ -7,6 +7,8 @@ services:
     volumes:
       - ./config/production.env:/app/config/production.env:ro
       - hapapp-production-runs:/tmp/hapapp_online_runs
+      - /etc/ssl/certs/ifs-brin-01.pem:/cert.pem:ro
+      - /etc/ssl/private/ifs-brin-01.key:/key.pem:ro
     restart: unless-stopped
 
 volumes:
