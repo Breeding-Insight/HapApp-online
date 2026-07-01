@@ -4,16 +4,21 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 DROPBOX_TOKEN_ENV = "HAPAPP_DROPBOX_ACCESS_TOKEN"
+DROPBOX_APP_KEY_ENV = "HAPAPP_DROPBOX_APP_KEY"
+DROPBOX_APP_SECRET_ENV = "HAPAPP_DROPBOX_APP_SECRET"
+DROPBOX_REFRESH_TOKEN_ENV = "HAPAPP_DROPBOX_REFRESH_TOKEN"
 DROPBOX_MADC_FOLDER_ENV = "HAPAPP_DROPBOX_MADC_FOLDER"
 DROPBOX_LOG_FOLDER_ENV = "HAPAPP_DROPBOX_LOG_FOLDER"
 DEFAULT_MADC_FOLDER = "/HapApp/MADC review"
 DEFAULT_LOG_FOLDER = "/HapApp/MADC logs"
+DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
 DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload"
 DROPBOX_SESSION_START_URL = "https://content.dropboxapi.com/2/files/upload_session/start"
 DROPBOX_SESSION_APPEND_URL = "https://content.dropboxapi.com/2/files/upload_session/append_v2"
@@ -23,6 +28,10 @@ DROPBOX_CHUNK_SIZE = 8 * 1024 * 1024
 
 
 class DropboxArchiveError(RuntimeError):
+    pass
+
+
+class _DropboxExpiredTokenError(DropboxArchiveError):
     pass
 
 
@@ -39,16 +48,30 @@ class DropboxConfig:
     access_token: str
     madc_folder: str
     log_folder: str
+    app_key: str = ""
+    app_secret: str = ""
+    refresh_token: str = ""
 
 
 def dropbox_config_from_env() -> DropboxConfig | None:
     token = os.environ.get(DROPBOX_TOKEN_ENV, "").strip()
-    if not token:
+    app_key = os.environ.get(DROPBOX_APP_KEY_ENV, "").strip()
+    app_secret = os.environ.get(DROPBOX_APP_SECRET_ENV, "").strip()
+    refresh_token = os.environ.get(DROPBOX_REFRESH_TOKEN_ENV, "").strip()
+    if not token and not any([app_key, app_secret, refresh_token]):
         return None
+    if not token and not all([app_key, app_secret, refresh_token]):
+        raise DropboxArchiveError(
+            "Dropbox refresh-token configuration requires "
+            f"{DROPBOX_APP_KEY_ENV}, {DROPBOX_APP_SECRET_ENV}, and {DROPBOX_REFRESH_TOKEN_ENV}."
+        )
     return DropboxConfig(
         access_token=token,
         madc_folder=_normalize_dropbox_folder(os.environ.get(DROPBOX_MADC_FOLDER_ENV, DEFAULT_MADC_FOLDER)),
         log_folder=_normalize_dropbox_folder(os.environ.get(DROPBOX_LOG_FOLDER_ENV, DEFAULT_LOG_FOLDER)),
+        app_key=app_key,
+        app_secret=app_secret,
+        refresh_token=refresh_token,
     )
 
 
@@ -77,7 +100,12 @@ def archive_madc_review_artifacts(
     if not run_id:
         raise DropboxArchiveError("A run ID is required to archive MADC artifacts.")
 
-    client = DropboxClient(resolved_config.access_token)
+    client = DropboxClient(
+        resolved_config.access_token,
+        app_key=resolved_config.app_key,
+        app_secret=resolved_config.app_secret,
+        refresh_token=resolved_config.refresh_token,
+    )
     messages: list[str] = []
     for label, relative_file, folder in uploads:
         local_path = (state.work_dir / relative_file).resolve()
@@ -90,15 +118,75 @@ def archive_madc_review_artifacts(
 
 
 class DropboxClient:
-    def __init__(self, access_token: str) -> None:
+    def __init__(
+        self,
+        access_token: str = "",
+        *,
+        app_key: str = "",
+        app_secret: str = "",
+        refresh_token: str = "",
+    ) -> None:
         self.access_token = access_token
+        self.app_key = app_key
+        self.app_secret = app_secret
+        self.refresh_token = refresh_token
 
     def upload(self, local_path: Path, dropbox_path: str) -> None:
         dropbox_path = _normalize_dropbox_file_path(dropbox_path)
-        if local_path.stat().st_size <= DROPBOX_SINGLE_UPLOAD_LIMIT:
-            self._single_upload(local_path, dropbox_path)
+        self._ensure_access_token()
+        try:
+            if local_path.stat().st_size <= DROPBOX_SINGLE_UPLOAD_LIMIT:
+                self._single_upload(local_path, dropbox_path)
+                return
+            self._chunked_upload(local_path, dropbox_path)
+        except _DropboxExpiredTokenError:
+            self._refresh_access_token()
+            if local_path.stat().st_size <= DROPBOX_SINGLE_UPLOAD_LIMIT:
+                self._single_upload(local_path, dropbox_path)
+                return
+            self._chunked_upload(local_path, dropbox_path)
+
+    def _ensure_access_token(self) -> None:
+        if self.access_token:
             return
-        self._chunked_upload(local_path, dropbox_path)
+        self._refresh_access_token()
+
+    def _refresh_access_token(self) -> None:
+        if not all([self.app_key, self.app_secret, self.refresh_token]):
+            raise DropboxArchiveError(
+                "Dropbox access token is missing and refresh-token configuration is incomplete."
+            )
+        data = urllib.parse.urlencode(
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": self.refresh_token,
+                "client_id": self.app_key,
+                "client_secret": self.app_secret,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            DROPBOX_TOKEN_URL,
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise DropboxArchiveError(f"Dropbox token refresh failed: HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise DropboxArchiveError(f"Dropbox token refresh failed: {exc.reason}") from exc
+
+        try:
+            parsed = json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise DropboxArchiveError("Dropbox token refresh returned invalid JSON.") from exc
+        access_token = parsed.get("access_token")
+        if not isinstance(access_token, str) or not access_token:
+            raise DropboxArchiveError("Dropbox token refresh did not return an access token.")
+        self.access_token = access_token
 
     def _single_upload(self, local_path: Path, dropbox_path: str) -> None:
         args = {
@@ -165,6 +253,8 @@ class DropboxClient:
                 body = response.read()
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 401 and "expired_access_token" in detail:
+                raise _DropboxExpiredTokenError("Dropbox access token expired.") from exc
             raise DropboxArchiveError(f"Dropbox upload failed: HTTP {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
             raise DropboxArchiveError(f"Dropbox upload failed: {exc.reason}") from exc

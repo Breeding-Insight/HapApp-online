@@ -6,8 +6,6 @@ services:
       args:
         DOCKER_PLATFORM: ${DOCKER_PLATFORM:-linux/amd64}
     image: ${HAPAPP_IMAGE:-hapapp-online}:${HAPAPP_TAG:-local}
-    ports:
-      - "${HAPAPP_HOST_PORT:-8050}:8050"
     healthcheck:
       test:
         [

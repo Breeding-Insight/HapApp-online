@@ -2,6 +2,8 @@ services:
   hapapp:
     container_name: hapapp-development
     image: hapapp-online:development
+    ports:
+      - "5050:8050"
     volumes:
       - ./config/development.env:/app/config/development.env:ro
       - hapapp-development-runs:/tmp/hapapp_online_runs

@@ -43,7 +43,7 @@ Both Pixi and local Docker Compose read `config/local.env`. Deployed VM environm
 
 ## Docker Compose
 
-Compose builds the docker image and mounts the selected environment-specific file under `/app/config/`. The app should keep `HAPAPP_PORT=8050` inside each mounted env file; set `HAPAPP_HOST_PORT` before running Compose if the host should expose a different port.
+Compose builds the docker image and mounts the selected environment-specific file under `/app/config/`. The app keeps Dash's internal `HAPAPP_PORT=8050` inside each mounted env file. The Compose overlays publish different VM host ports: local `8050`, development `5050`, and production `5081`.
 
 Local Docker development, with source directories mounted into the container:
 

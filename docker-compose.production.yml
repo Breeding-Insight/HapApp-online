@@ -2,6 +2,8 @@ services:
   hapapp:
     container_name: hapapp-production
     image: hapapp-online:production
+    ports:
+      - "5081:8050"
     volumes:
       - ./config/production.env:/app/config/production.env:ro
       - hapapp-production-runs:/tmp/hapapp_online_runs
