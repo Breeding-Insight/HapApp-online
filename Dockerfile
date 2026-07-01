@@ -27,7 +27,8 @@ RUN python -m pip install --no-deps . \
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
-    && chown -R app:app /app
+    && mkdir -p /tmp/hapapp_online_runs \
+    && chown -R app:app /app /tmp/hapapp_online_runs
 
 EXPOSE 8050
 
