@@ -22,12 +22,10 @@ def load_env() -> None:
 
     env_path = _find_env_file()
     if env_path is None:
-        raise RuntimeError(
-            "Missing required environment file. Copy config/local.env.example to config/local.env."
-        )
+        raise RuntimeError("Missing required environment file. Copy config/local.env.example to config/local.env.")
 
     _clear_hapapp_environment()
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     _LOADED = True
 
 

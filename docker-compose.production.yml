@@ -4,6 +4,10 @@ services:
     image: hapapp-online:production
     ports:
       - "5081:8050"
+    environment:
+      TLS_ENABLED: "true"
+      TLS_CERT_PATH: /cert.pem
+      TLS_KEY_PATH: /key.pem
     volumes:
       - ./config/production.env:/app/config/production.env:ro
       - hapapp-production-runs:/tmp/hapapp_online_runs

@@ -4,6 +4,10 @@ services:
     image: hapapp-online:development
     ports:
       - "5050:8050"
+    environment:
+      TLS_ENABLED: "true"
+      TLS_CERT_PATH: /cert.pem
+      TLS_KEY_PATH: /key.pem
     volumes:
       - ./config/development.env:/app/config/development.env:ro
       - hapapp-development-runs:/tmp/hapapp_online_runs

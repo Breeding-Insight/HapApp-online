@@ -55,6 +55,36 @@ class EnvTests(unittest.TestCase):
                 self.assertNotIn("HAPAPP_DROPBOX_ACCESS_TOKEN", os.environ)
                 self.assertEqual(os.environ["PATH"], "/usr/bin")
 
+    def test_process_environment_values_override_non_hapapp_dotenv_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            env_path = Path(tmp_dir) / "config" / "development.env"
+            env_path.parent.mkdir()
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "TLS_ENABLED=false",
+                        "TLS_CERT_PATH=/file-cert.pem",
+                        "TLS_KEY_PATH=/file-key.pem",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(app_env, "_LOADED", False), patch.dict(
+                os.environ,
+                {
+                    "TLS_ENABLED": "true",
+                    "TLS_CERT_PATH": "/cert.pem",
+                    "TLS_KEY_PATH": "/key.pem",
+                },
+                clear=True,
+            ), patch("os.getcwd", return_value=tmp_dir):
+                app_env.load_env()
+
+                self.assertEqual(os.environ["TLS_ENABLED"], "true")
+                self.assertEqual(os.environ["TLS_CERT_PATH"], "/cert.pem")
+                self.assertEqual(os.environ["TLS_KEY_PATH"], "/key.pem")
+
     def test_raises_when_dotenv_file_is_missing(self) -> None:
         with patch.object(app_env, "_LOADED", False), patch("hapapp_python.env._find_env_file", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "Missing required environment file"):
