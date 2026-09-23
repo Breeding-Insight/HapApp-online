@@ -7,7 +7,7 @@ import shutil
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote, unquote, urlparse
@@ -37,6 +37,18 @@ class GitHubContentClient(Protocol):
     def get_content(self, content_ref: GitHubContentRef) -> Any: ...
 
     def download_file(self, file_entry: Mapping[str, Any], destination_dir: Path) -> Path: ...
+
+
+class _PinnedGitHubContentClient:
+    def __init__(self, client: GitHubContentClient, ref: str):
+        self._client = client
+        self._ref = ref
+
+    def get_content(self, content_ref: GitHubContentRef) -> Any:
+        return self._client.get_content(replace(content_ref, ref=self._ref))
+
+    def download_file(self, file_entry: Mapping[str, Any], destination_dir: Path) -> Path:
+        return self._client.download_file(file_entry, destination_dir)
 
 
 class GitHubContentsClient:
@@ -91,6 +103,7 @@ def resolve_madc_panel_files(
     *,
     github_token: str | None = None,
     github_client: GitHubContentClient | None = None,
+    pinned_github_ref: str | None = None,
 ) -> ResolvedMADCPanel:
     """Copy any GitHub-backed panel files into this run's work directory."""
     destination_dir = work_dir / "panel_files" / _safe_dir_name(panel.panel_id)
@@ -105,6 +118,9 @@ def resolve_madc_panel_files(
                 f"Selected species panel {panel.label!r} uses GitHub files, but {GITHUB_TOKEN_ENV} is not set."
             )
         github_client = GitHubContentsClient(token)
+
+    if pinned_github_ref:
+        github_client = _PinnedGitHubContentClient(github_client, pinned_github_ref)
 
     destination_dir.mkdir(parents=True, exist_ok=True)
 
@@ -169,12 +185,37 @@ def resolve_madc_panel_lut(
 
 def madc_panel_github_source(panel: MADCPanel) -> tuple[str | None, str | None]:
     """Return the repository URL and configured ref used by a GitHub-backed panel."""
-    for file_ref in [panel.allele_db_indel, panel.allele_db_base, panel.snpid_lut]:
-        if not is_github_url(file_ref):
-            continue
-        github_ref = _parse_github_url(str(file_ref))
-        return f"https://github.com/{github_ref.owner}/{github_ref.repo}", github_ref.ref
-    return None, None
+    sources = {
+        (github_ref.owner, github_ref.repo, github_ref.ref)
+        for file_ref in [
+            panel.snpid_lut,
+            panel.allele_db_base,
+            panel.matchcnt_lut_base,
+            panel.allele_db_indel,
+            panel.matchcnt_lut_indel,
+            panel.dup_tags,
+        ]
+        if is_github_url(file_ref)
+        if (github_ref := _parse_github_url(str(file_ref)))
+    }
+    if not sources:
+        return None, None
+    if len(sources) != 1:
+        raise PanelFileResolutionError(
+            "A publishable species panel must load all GitHub files from one repository and branch."
+        )
+    owner, repo, ref = sources.pop()
+    return f"https://github.com/{owner}/{repo}", ref
+
+
+def madc_panel_database_directory(panel: MADCPanel) -> str | None:
+    """Return the repository directory that receives new versioned DB files."""
+    if not is_github_url(panel.allele_db_base):
+        return None
+    github_ref = _parse_github_url(str(panel.allele_db_base))
+    if github_ref.kind != "tree":
+        return str(Path(github_ref.path).parent.as_posix())
+    return github_ref.path.rstrip("/")
 
 
 def _resolve_base_pair(
@@ -413,4 +454,10 @@ def _safe_dir_name(value: str) -> str:
 
 def _http_error_message(prefix: str, url: str, exc: urllib.error.HTTPError) -> str:
     detail = exc.read().decode("utf-8", errors="replace")[:300]
+    if exc.code == 401:
+        return (
+            f"{prefix} for {url} (401): GitHub rejected HAPAPP_GITHUB_TOKEN. "
+            "Create or configure a valid GitHub token with read access to the panel repository, "
+            "then restart HapApp so the updated environment is loaded."
+        )
     return f"{prefix} for {url} ({exc.code}): {detail}"

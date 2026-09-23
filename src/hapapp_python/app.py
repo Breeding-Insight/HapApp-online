@@ -33,18 +33,41 @@ from flask import Flask, redirect, request
 
 from hapapp_python import config
 from hapapp_python.auth import auth_bp, get_current_user, is_authenticated
-from hapapp_python.github_panel_files import madc_panel_github_source, resolve_madc_panel_files, resolve_madc_panel_lut
+from hapapp_python.github_panel_files import (
+    madc_panel_database_directory,
+    madc_panel_github_source,
+    resolve_madc_panel_files,
+    resolve_madc_panel_lut,
+)
+from hapapp_python.github_submission import (
+    GitHubCommitAuthor,
+    GitHubContributionFile,
+    GitHubPublicationError,
+    StaleGitHubBaseError,
+    assert_github_base_is_current,
+    github_branch_head,
+    parse_github_repository,
+    publish_github_contribution,
+)
+from hapapp_python.github_recovery import recover_stranded_github_publications
 from hapapp_python.dropbox_archive import archive_madc_review_artifacts
 from hapapp_python.madc_submission import (
     MADC_SUBMISSION_METADATA_FILENAME,
     MADCSubmissionMetadata,
     build_madc_submission_metadata,
+    claim_submission_for_publication,
+    find_duplicate_madc_submission,
     get_submission_state,
     infer_genotyping_project_id,
+    persist_github_incorporation,
     persist_submission_archive_status,
     persist_submission_decision,
+    persist_submission_freshness,
     persist_submission_metadata,
     persist_submission_result_provenance,
+    persist_submission_review_state,
+    release_submission_publication_claim,
+    assert_submission_publication_schema_ready,
     write_submission_metadata,
 )
 from hapapp_python.madc_workflow import build_madc_command, missing_madc_commands
@@ -78,6 +101,7 @@ MADC_MAIN_RESULT_PATTERN = re.compile(
 MADC_DB_VERSION_RE = re.compile(r"v(?P<version>\d{3})")
 MADC_LOG_FILENAME = "hapapp_madc_workflow.log"
 MADC_RUN_METADATA_FILENAME = "hapapp_madc_run_metadata.json"
+MADC_GITHUB_METADATA_FILENAME = "hapapp_github_contribution_metadata.json"
 APP_NAME = "HapApp"
 LOGGER = logging.getLogger(__name__)
 TERMINAL_AUTO_SCROLL_SCRIPT = """
@@ -289,7 +313,7 @@ def _identify_uploaded_madc_panel(report: Path) -> MADCPanelIdentification:
     validate_madc_filename(report.name)
     panels = load_madc_panels()
     candidates: list[MADCPanelCandidate] = []
-    unavailable: list[str] = []
+    unavailable: list[tuple[str, str]] = []
 
     with tempfile.TemporaryDirectory(prefix="hapapp_panel_identification_") as tmp_dir:
         work_dir = Path(tmp_dir)
@@ -297,7 +321,7 @@ def _identify_uploaded_madc_panel(report: Path) -> MADCPanelIdentification:
             try:
                 panel_lut = resolve_madc_panel_lut(panel, work_dir)
             except ValueError as exc:
-                unavailable.append(panel.label)
+                unavailable.append((panel.label, str(exc)))
                 LOGGER.warning("Could not load SNP ID LUT for panel %s: %s", panel.panel_id, exc)
                 continue
             candidates.append(
@@ -313,8 +337,11 @@ def _identify_uploaded_madc_panel(report: Path) -> MADCPanelIdentification:
             return identify_raw_madc_panel(report, candidates)
         except MADCPanelIdentificationError as exc:
             if unavailable:
+                unavailable_summary = "; ".join(
+                    f"{label} ({reason})" for label, reason in unavailable
+                )
                 raise MADCPanelIdentificationError(
-                    f"{exc} Panel(s) unavailable for identification: {', '.join(unavailable)}."
+                    f"{exc} Panel(s) unavailable for identification: {unavailable_summary}."
                 ) from exc
             raise
 
@@ -382,7 +409,7 @@ def _submission_package_files(state: RunState) -> list[str]:
                 *sorted(state.main_result_files),
             ]
         )
-        if file_path
+        if file_path and (state.work_dir / file_path).is_file()
     ]
 
 
@@ -444,6 +471,272 @@ def _persist_run_result_provenance(state: RunState) -> None:
         proposed_database_version=_madc_submission_db_version(state),
         output_checksums_json=json.dumps(_output_checksums(state), sort_keys=True),
     )
+
+
+def _github_source_from_state(state: RunState):
+    metadata = _read_submission_metadata(state)
+    repository_url = metadata.get("input_github_repository")
+    github_ref = metadata.get("input_github_ref")
+    commit_sha = metadata.get("input_github_commit_sha")
+    if not all(isinstance(value, str) and value for value in [repository_url, github_ref, commit_sha]):
+        raise GitHubPublicationError(
+            "This species panel is not configured with a pinned GitHub repository, branch, and input commit."
+        )
+    return parse_github_repository(repository_url, github_ref), commit_sha
+
+
+def _submission_uses_github_publication(state: RunState) -> bool:
+    metadata = _read_submission_metadata(state)
+    panel_id = metadata.get("panel_id")
+    if not isinstance(panel_id, str) or not panel_id:
+        raise GitHubPublicationError("Submission metadata is missing the species panel id.")
+
+    source_values = [
+        metadata.get("input_github_repository"),
+        metadata.get("input_github_ref"),
+        metadata.get("input_github_commit_sha"),
+    ]
+    configured_values = [isinstance(value, str) and bool(value.strip()) for value in source_values]
+    if all(configured_values):
+        return True
+    if any(configured_values):
+        raise GitHubPublicationError(
+            "Submission metadata has an incomplete pinned GitHub repository, branch, or input commit."
+        )
+
+    try:
+        panel = get_madc_panel(panel_id)
+        repository_url, github_ref = madc_panel_github_source(panel)
+    except ValueError as exc:
+        raise GitHubPublicationError(f"Could not verify the species panel publication mode: {exc}") from exc
+    if repository_url or github_ref:
+        raise GitHubPublicationError(
+            "This GitHub-backed submission is missing its pinned repository, branch, and input commit."
+        )
+    return False
+
+
+def _refresh_run_github_freshness(state: RunState) -> None:
+    try:
+        repository, expected_sha = _github_source_from_state(state)
+    except GitHubPublicationError:
+        return
+
+    try:
+        assert_github_base_is_current(repository, expected_sha)
+        freshness_status = "current"
+        feedback = None
+    except StaleGitHubBaseError as exc:
+        freshness_status = "stale"
+        feedback = str(exc)
+    except GitHubPublicationError as exc:
+        _append_log(state.run_id, f"GitHub freshness check deferred: {exc}")
+        return
+
+    try:
+        persist_submission_freshness(
+            state.run_id,
+            state.owner_orcid_id,
+            freshness_status,
+            review_feedback=feedback,
+        )
+    except Exception as exc:  # noqa: BLE001 - the final GitHub CAS remains authoritative.
+        _append_log(state.run_id, f"Submission freshness database write failed: {exc}")
+    with RUNS_LOCK:
+        current = RUNS.get(state.run_id)
+        if current and current.owner_orcid_id == state.owner_orcid_id:
+            current.freshness_status = freshness_status
+            current.review_feedback = feedback
+
+
+def _write_github_contribution_metadata(state: RunState) -> Path:
+    payload = {
+        **_read_submission_metadata(state),
+        "workflow_status": state.status,
+        "previous_haplotype_database_version": _madc_previous_db_version(state),
+        "proposed_haplotype_database_version": _madc_submission_db_version(state),
+        "fixed_madc_file": state.fixed_madc_file,
+        "database_files": sorted(
+            file_path for file_path in state.main_result_files if (state.work_dir / file_path).is_file()
+        ),
+        "output_sha256": _output_checksums(state),
+    }
+    path = state.work_dir / MADC_GITHUB_METADATA_FILENAME
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def _github_contribution_files(state: RunState) -> tuple[list[GitHubContributionFile], str]:
+    metadata = _read_submission_metadata(state)
+    panel_id = metadata.get("panel_id")
+    if not isinstance(panel_id, str) or not panel_id:
+        raise GitHubPublicationError("Submission metadata is missing the species panel id.")
+    panel = get_madc_panel(panel_id)
+    if not panel.github_madc_dir or not panel.github_metadata_dir:
+        raise GitHubPublicationError(
+            f"Species panel {panel.label!r} must configure github_madc_dir and github_metadata_dir."
+        )
+    database_dir = madc_panel_database_directory(panel)
+    if not database_dir:
+        raise GitHubPublicationError(f"Species panel {panel.label!r} does not have a GitHub database directory.")
+    if not state.fixed_madc_file or not (state.work_dir / state.fixed_madc_file).is_file():
+        raise GitHubPublicationError("The processed fixed-allele-ID MADC file is missing.")
+
+    contribution_metadata = _write_github_contribution_metadata(state)
+    run_prefix = _safe_filename(state.run_id, "run")
+    database_files = [
+        relative for relative in sorted(state.main_result_files) if (state.work_dir / relative).is_file()
+    ]
+    if not any(path.endswith(".fa") for path in database_files) or not any(
+        path.endswith("_matchCnt_lut.txt") for path in database_files
+    ):
+        raise GitHubPublicationError(
+            "A novel-allele publication requires both the new FASTA database and match-count LUT."
+        )
+    files = [
+        GitHubContributionFile(
+            state.work_dir / state.fixed_madc_file,
+            f"{panel.github_madc_dir}/{run_prefix}_{Path(state.fixed_madc_file).name}",
+        ),
+        GitHubContributionFile(
+            contribution_metadata,
+            f"{panel.github_metadata_dir}/{run_prefix}.json",
+        ),
+    ]
+    for relative in database_files:
+        local_path = state.work_dir / relative
+        files.append(GitHubContributionFile(local_path, f"{database_dir}/{local_path.name}"))
+    return files, panel.label
+
+
+def _publish_run_to_github(run_id: str | None, owner_orcid_id: str) -> bool:
+    state = _snapshot_for_owner(run_id, owner_orcid_id)
+    if state is None or state.status != "completed" or state.submission_status != "awaiting_decision":
+        return False
+
+    _, new_allele_count = _madc_result_summary(state)
+    if new_allele_count is None:
+        _append_log(state.run_id, "GitHub publication blocked because the new-allele count is unavailable.")
+        return False
+    if new_allele_count == 0:
+        _append_log(state.run_id, "GitHub publication skipped because no novel alleles were found.")
+        return False
+
+    try:
+        updated_rows = claim_submission_for_publication(state.run_id, owner_orcid_id)
+        if updated_rows != 1:
+            return False
+    except Exception as exc:  # noqa: BLE001 - no GitHub write occurs without the durable claim.
+        _append_log(state.run_id, f"Could not claim submission for GitHub publication: {exc}")
+        return False
+
+    with RUNS_LOCK:
+        current = RUNS.get(state.run_id)
+        if current and current.owner_orcid_id == owner_orcid_id:
+            current.submission_status = "publishing"
+
+    try:
+        repository, expected_sha = _github_source_from_state(state)
+        files, panel_label = _github_contribution_files(state)
+        metadata = _read_submission_metadata(state)
+        project_id = metadata.get("inferred_project_id") or state.run_id[:8]
+        display_name = metadata.get("submitter_display_name")
+        submitter_email = metadata.get("submitter_email")
+        author = (
+            GitHubCommitAuthor(display_name, submitter_email)
+            if isinstance(display_name, str)
+            and display_name
+            and isinstance(submitter_email, str)
+            and submitter_email
+            else None
+        )
+        result = publish_github_contribution(
+            repository,
+            expected_sha,
+            files,
+            f"Add {panel_label} MADC contribution {project_id}\n\nHapApp-Run-ID: {state.run_id}\nSubmitter-ORCID: {owner_orcid_id}",
+            author=author,
+        )
+    except StaleGitHubBaseError as exc:
+        durable_status = "changes_requested"
+        try:
+            updated_rows = persist_submission_review_state(
+                state.run_id,
+                status="changes_requested",
+                freshness_status="stale",
+                review_feedback=str(exc),
+                input_github_commit_sha=exc.expected_sha,
+            )
+            if updated_rows != 1:
+                raise RuntimeError("stale publication status did not update exactly one database record")
+        except Exception as status_exc:  # noqa: BLE001 - release the claim so the run is not stranded.
+            _append_log(state.run_id, f"Could not record stale GitHub publication status: {status_exc}")
+            durable_status = "publishing"
+            try:
+                released_rows = release_submission_publication_claim(
+                    state.run_id,
+                    owner_orcid_id,
+                    str(exc),
+                    freshness_status="stale",
+                )
+                if released_rows == 1:
+                    durable_status = "awaiting_decision"
+                else:
+                    _append_log(
+                        state.run_id,
+                        "Could not release stale GitHub publication claim: no publishing record was updated.",
+                    )
+            except Exception as release_exc:  # noqa: BLE001 - reconciliation is required if both writes fail.
+                _append_log(state.run_id, f"Could not release stale GitHub publication claim: {release_exc}")
+        with RUNS_LOCK:
+            current = RUNS.get(state.run_id)
+            if current and current.owner_orcid_id == owner_orcid_id:
+                current.submission_status = durable_status
+                current.freshness_status = "stale"
+                current.review_feedback = str(exc)
+        _append_log(state.run_id, f"GitHub publication rejected as stale: {exc}")
+        return False
+    except Exception as exc:  # noqa: BLE001 - release the durable claim for a safe retry.
+        error = f"GitHub publication failed: {exc}"
+        durable_status = "publishing"
+        try:
+            released_rows = release_submission_publication_claim(state.run_id, owner_orcid_id, error)
+            if released_rows == 1:
+                durable_status = "awaiting_decision"
+            else:
+                _append_log(
+                    state.run_id,
+                    "Could not release GitHub publication claim: no publishing record was updated.",
+                )
+        except Exception as release_exc:  # noqa: BLE001
+            _append_log(state.run_id, f"Could not release publication claim: {release_exc}")
+        with RUNS_LOCK:
+            current = RUNS.get(state.run_id)
+            if current and current.owner_orcid_id == owner_orcid_id:
+                current.submission_status = durable_status
+                current.review_feedback = error
+        _append_log(state.run_id, error)
+        return False
+
+    try:
+        updated_rows = persist_github_incorporation(
+            state.run_id,
+            owner_orcid_id,
+            result.commit_url,
+        )
+        if updated_rows != 1:
+            raise RuntimeError("GitHub incorporation did not update exactly one publishing database record")
+    except Exception as exc:  # noqa: BLE001 - GitHub already accepted the atomic commit.
+        _append_log(state.run_id, f"GitHub commit succeeded but its database status write failed: {exc}")
+    with RUNS_LOCK:
+        current = RUNS.get(state.run_id)
+        if current and current.owner_orcid_id == owner_orcid_id:
+            current.submission_status = "incorporated"
+            current.freshness_status = "current"
+            current.review_feedback = None
+            current.incorporation_commit_url = result.commit_url
+            current.log.append(f"Published GitHub contribution: {result.commit_url}")
+    return True
 
 
 def _archive_run_results(
@@ -588,6 +881,7 @@ def _run_process(run_id: str) -> None:
                 _persist_run_result_provenance(completed_state)
             except Exception as exc:  # noqa: BLE001 - workflow results remain usable if provenance persistence fails.
                 _append_log(run_id, f"Submission result provenance database write failed: {exc}")
+            _refresh_run_github_freshness(completed_state)
     except Exception as exc:  # noqa: BLE001 - surfaced directly in local UI.
         with RUNS_LOCK:
             state = RUNS[run_id]
@@ -683,6 +977,7 @@ def _status_text(state: RunState | None) -> str:
 def _submission_status_label(status: str) -> str:
     return {
         "awaiting_decision": "Awaiting decision",
+        "publishing": "Publishing to GitHub",
         "submitted_for_review": "Submitted for review",
         "changes_requested": "Changes requested",
         "accepted": "Accepted",
@@ -847,7 +1142,11 @@ def _madc_submission_db_version(state: RunState | None) -> str | None:
     if state is None:
         return None
     for file_path in sorted(state.main_result_files):
-        if file_path.endswith(".fa") and (match := MADC_DB_VERSION_RE.search(Path(file_path).name)):
+        if (
+            file_path.endswith(".fa")
+            and (state.work_dir / file_path).is_file()
+            and (match := MADC_DB_VERSION_RE.search(Path(file_path).name))
+        ):
             return f"v{match.group('version')}"
     return None
 
@@ -880,9 +1179,20 @@ def _selected_submission_summary(state: RunState | None, selected: list[str]) ->
         else submitter_name or submitter_orcid or "Not available"
     )
     submission_files = _submission_package_files(state) if state else []
+    zero_new_alleles = new_allele_count == 0
 
     return html.Div(
         [
+            dbc.Alert(
+                [
+                    html.Strong("No novel alleles were found. "),
+                    "No GitHub commit or microhapDB version change will be made. By downloading, you agree "
+                    "to share the processed MADC, metadata, and workflow log with Breeding Insight for review.",
+                ],
+                color="warning",
+            )
+            if zero_new_alleles
+            else None,
             _madc_result_summary_cards(state),
             html.Div(
                 html.Button(
@@ -918,7 +1228,11 @@ def _selected_submission_summary(state: RunState | None, selected: list[str]) ->
                     html.Dt("Previous haplotype database version"),
                     html.Dd(previous_db_version or "Not available"),
                     html.Dt("Proposed haplotype database version"),
-                    html.Dd(proposed_db_version or "Not available"),
+                    html.Dd(
+                        f"No change ({previous_db_version})"
+                        if zero_new_alleles and previous_db_version
+                        else proposed_db_version or "Not available"
+                    ),
                     html.Dt("Accessions recognized"),
                     html.Dd(f"{accession_count:,}" if accession_count is not None else "Not available"),
                     html.Dt("New alleles found"),
@@ -926,7 +1240,7 @@ def _selected_submission_summary(state: RunState | None, selected: list[str]) ->
                 ],
                 className="submission-confirmation-details",
             ),
-            html.H5("Submission package"),
+            html.H5("Files shared with Breeding Insight"),
             html.Ul([html.Li(file_path) for file_path in submission_files], className="submission-confirmation-files"),
             html.H5("Files downloaded to your computer after submission"),
             html.Ul([html.Li(file_path) for file_path in selected_files], className="submission-confirmation-files"),
@@ -958,6 +1272,7 @@ def _editable_submission_summary(state: RunState | None, selected: list[str]) ->
         else submitter_name or submitter_orcid or "Not available"
     )
     submission_files = _submission_package_files(state) if state else []
+    zero_new_alleles = new_allele_count == 0
 
     return html.Div(
         [
@@ -999,7 +1314,11 @@ def _editable_submission_summary(state: RunState | None, selected: list[str]) ->
                     html.Dt("Previous haplotype database version"),
                     html.Dd(previous_db_version or "Not available"),
                     html.Dt("Proposed haplotype database version"),
-                    html.Dd(proposed_db_version or "Not available"),
+                    html.Dd(
+                        f"No change ({previous_db_version})"
+                        if zero_new_alleles and previous_db_version
+                        else proposed_db_version or "Not available"
+                    ),
                     html.Dt("Accessions recognized"),
                     html.Dd(f"{accession_count:,}" if accession_count is not None else "Not available"),
                     html.Dt("New alleles found"),
@@ -1007,7 +1326,7 @@ def _editable_submission_summary(state: RunState | None, selected: list[str]) ->
                 ],
                 className="submission-confirmation-details submission-confirmation-details--editable",
             ),
-            html.H5("Submission package"),
+            html.H5("Files shared with Breeding Insight"),
             html.Ul([html.Li(file_path) for file_path in submission_files], className="submission-confirmation-files"),
             html.H5("Files downloaded to your computer after submission"),
             html.Ul([html.Li(file_path) for file_path in selected_files], className="submission-confirmation-files"),
@@ -1247,13 +1566,13 @@ def _madc_results_modal() -> dbc.Modal:
             dbc.ModalFooter(
                 [
                     dbc.Button(
-                        "Cancel Run and Decline Submission",
+                        "Cancel Run and Do Not Share",
                         id="madc-results-decline",
                         color="danger",
                         outline=True,
                     ),
                     dbc.Button(
-                        "Review Submission and Download",
+                        "Review Sharing and Download",
                         id="madc-download-button",
                         color="success",
                         disabled=True,
@@ -1272,11 +1591,14 @@ def _madc_results_modal() -> dbc.Modal:
 def _madc_submission_confirmation_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Confirm Haplotype Database Submission"), close_button=False),
+            dbc.ModalHeader(dbc.ModalTitle("Confirm Sharing and Download"), close_button=False),
             dbc.ModalBody(
                 [
                     html.P(
-                        "Submitting will send this run for review and archive its processed MADC and workflow log."
+                        "By downloading these results, you agree to share the processed MADC, contribution "
+                        "metadata, and workflow log with Breeding Insight. Breeding Insight will review the "
+                        "files for incorporation. Runs with novel alleles may also update the configured GitHub "
+                        "database branch before download."
                     ),
                     html.Div(id="madc-submission-edit-message"),
                     html.Div(id="madc-submission-confirmation-summary"),
@@ -1286,7 +1608,7 @@ def _madc_submission_confirmation_modal() -> dbc.Modal:
                 [
                     dbc.Button("Back", id="madc-submission-confirmation-back", color="secondary", outline=True),
                     dbc.Button(
-                        "Confirm Submit and Download",
+                        "Agree, Share, and Download",
                         id="madc-submission-confirmation-submit",
                         color="success",
                     ),
@@ -1987,6 +2309,7 @@ def register_callbacks(app: Dash) -> None:
 
         main_options, diagnostic_options = _split_madc_result_options(state)
         awaiting_decision = state.submission_status == "awaiting_decision"
+        publication_in_progress = state.submission_status == "publishing"
         stale_awaiting_decision = awaiting_decision and state.freshness_status == "stale"
         return (
             True,
@@ -1994,11 +2317,16 @@ def register_callbacks(app: Dash) -> None:
             (
                 dbc.Alert(
                     "This run is stale because GitHub has advanced since it started. "
-                    "Rerun it against the latest database before submitting.",
+                    "Rerun it against the latest database before sharing the results.",
                     color="danger",
                 )
                 if stale_awaiting_decision
-                else "Review the run summary and choose whether to submit it to the haplotype database."
+                else dbc.Alert(state.review_feedback, color="danger")
+                if awaiting_decision and state.review_feedback
+                else (
+                    "Review the run summary. Downloading shares the processed MADC, metadata, and workflow "
+                    "log with Breeding Insight for review."
+                )
                 if awaiting_decision
                 else _submission_review_alert(state)
             ),
@@ -2008,11 +2336,13 @@ def register_callbacks(app: Dash) -> None:
             diagnostic_options,
             [],
             {},
-            "Cancel Run and Decline Submission" if awaiting_decision else "Cancel",
+            "Cancel Run and Do Not Share" if awaiting_decision else "Cancel",
             "danger" if awaiting_decision else "secondary",
             "Rerun Required"
             if stale_awaiting_decision
-            else "Review Submission and Download"
+            else "Publishing to GitHub..."
+            if publication_in_progress
+            else "Review Sharing and Download"
             if awaiting_decision
             else "Download Selected",
             no_update,
@@ -2034,12 +2364,32 @@ def register_callbacks(app: Dash) -> None:
         owner_orcid_id = (get_current_user() or {}).get("orcid_id", "")
         _sync_submission_state(run_id, owner_orcid_id)
         state = _snapshot_for_owner(run_id, owner_orcid_id)
-        if state is None or state.submission_status == "declined":
+        if state is None or state.submission_status in {"declined", "publishing"}:
             return no_update
 
         if state.submission_status == "awaiting_decision":
-            if not _record_submission_decision(run_id, owner_orcid_id, "submitted_for_review"):
+            _, new_allele_count = _madc_result_summary(state)
+            if new_allele_count is None:
+                _append_log(run_id, "Could not determine the number of new alleles; sharing was blocked.")
                 return no_update
+            if new_allele_count == 0:
+                if not _record_submission_decision(run_id, owner_orcid_id, "submitted_for_review"):
+                    return no_update
+                _append_log(
+                    run_id,
+                    "No novel alleles were found. GitHub publication was skipped; files were shared for review.",
+                )
+            else:
+                try:
+                    uses_github_publication = _submission_uses_github_publication(state)
+                except GitHubPublicationError as exc:
+                    _append_log(run_id, f"Could not determine submission publication mode: {exc}")
+                    return no_update
+                if uses_github_publication:
+                    if not _publish_run_to_github(run_id, owner_orcid_id):
+                        return no_update
+                elif not _record_submission_decision(run_id, owner_orcid_id, "submitted_for_review"):
+                    return no_update
             _archive_run_results(
                 run_id,
                 owner_orcid_id,
@@ -2223,6 +2573,14 @@ def register_callbacks(app: Dash) -> None:
             if missing_metadata:
                 raise ValueError("Complete required submission metadata: " + ", ".join(missing_metadata))
 
+            duplicate = find_duplicate_madc_submission(report_source.name, str(inferred_project_id))
+            if duplicate:
+                raise ValueError(
+                    "This MADC filename and formal project ID were already processed "
+                    f"(run {duplicate.get('run_id')}, status {duplicate.get('submission_status')}). "
+                    "Contact Breeding Insight if the prior record should be replaced."
+                )
+
             # User-facing MADC parameters live on the selected species panel.
             panel = get_madc_panel(panel_id)
 
@@ -2245,7 +2603,15 @@ def register_callbacks(app: Dash) -> None:
 
             # GitHub-backed panels are copied into this run so every run starts clean.
             input_github_repository, input_github_ref = madc_panel_github_source(panel)
-            resolved_panel = resolve_madc_panel_files(panel, work_dir)
+            input_github_commit_sha = None
+            if input_github_repository and input_github_ref:
+                github_repository = parse_github_repository(input_github_repository, input_github_ref)
+                input_github_commit_sha = github_branch_head(github_repository)
+            resolved_panel = resolve_madc_panel_files(
+                panel,
+                work_dir,
+                pinned_github_ref=input_github_commit_sha,
+            )
             input_files.update(_panel_input_files(resolved_panel, work_dir))
             main_result_files = _expected_new_madc_db_files(resolved_panel, work_dir)
 
@@ -2281,6 +2647,7 @@ def register_callbacks(app: Dash) -> None:
                 panel_label=resolved_panel.label,
                 input_github_repository=input_github_repository,
                 input_github_ref=input_github_ref,
+                input_github_commit_sha=input_github_commit_sha,
             )
             write_submission_metadata(work_dir, metadata)
             persist_submission_metadata(metadata)
@@ -2345,11 +2712,12 @@ def register_callbacks(app: Dash) -> None:
         stale_awaiting_decision = bool(
             state and state.submission_status == "awaiting_decision" and state.freshness_status == "stale"
         )
+        publication_in_progress = bool(state and state.submission_status == "publishing")
         return (
             _terminal_text(state),
             _status_text(state),
             options,
-            len(options) == 0 or stale_awaiting_decision,
+            len(options) == 0 or stale_awaiting_decision or publication_in_progress,
             len(options) == 0,
             "Results Declined" if state and state.submission_status == "declined" else "View Results",
         )
@@ -2376,6 +2744,26 @@ def main() -> None:
     args = parser.parse_args()
 
     RUN_BASE.mkdir(parents=True, exist_ok=True)
+    if config.DATABASE_PREFLIGHT:
+        assert_submission_publication_schema_ready()
+    if config.GITHUB_PUBLISHING_RECOVERY_ENABLED:
+        try:
+            recovery = recover_stranded_github_publications(
+                config.GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS
+            )
+            for message in recovery.messages:
+                LOGGER.warning(message) if "deferred" in message or "failed" in message else LOGGER.info(message)
+            LOGGER.info(
+                "GitHub publication recovery inspected=%s incorporated=%s released=%s stale=%s unchanged=%s deferred=%s",
+                recovery.inspected,
+                recovery.incorporated,
+                recovery.released,
+                recovery.stale,
+                recovery.unchanged,
+                recovery.deferred,
+            )
+        except Exception:  # noqa: BLE001 - recovery must not prevent the web service from starting.
+            LOGGER.exception("Could not inspect stranded GitHub publication claims during startup.")
     app = create_app()
     if not args.no_open:
         scheme = "https" if config.SSL_CONTEXT else "http"

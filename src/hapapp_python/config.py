@@ -43,6 +43,19 @@ else:
     if os.getenv("MSSQL_TRUST_SERVER_CERTIFICATE", "").lower() in ("true", "1", "yes"):
         _conn_opts += ";TrustServerCertificate=yes"
 DATABASE_CONNECTION_STRING = os.getenv("MSSQL_CONNECTION_STRING", _conn_opts)
+DATABASE_PREFLIGHT = os.getenv(
+    "HAPAPP_DATABASE_PREFLIGHT",
+    "1" if APP_ENV in {"development", "production"} else "0",
+).lower() in ("true", "1", "yes")
+GITHUB_PUBLISHING_RECOVERY_ENABLED = os.getenv(
+    "HAPAPP_GITHUB_PUBLISHING_RECOVERY_ENABLED",
+    "1" if APP_ENV in {"development", "production"} else "0",
+).lower() in ("true", "1", "yes")
+GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS = int(
+    os.getenv("HAPAPP_GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS", "3600")
+)
+if GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS <= 0:
+    raise ValueError("HAPAPP_GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS must be greater than zero.")
 
 ORCID_CLIENT_ID = os.getenv("ORCID_CLIENT_ID", "")
 ORCID_CLIENT_SECRET = os.getenv("ORCID_CLIENT_SECRET", "")

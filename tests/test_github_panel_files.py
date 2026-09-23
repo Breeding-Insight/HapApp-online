@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import tempfile
+import urllib.error
 import unittest
 from pathlib import Path
 from typing import Any
@@ -8,9 +10,11 @@ from typing import Any
 from hapapp_python.github_panel_files import (
     GitHubContentRef,
     PanelFileResolutionError,
+    madc_panel_database_directory,
     madc_panel_github_source,
     resolve_madc_panel_files,
     resolve_madc_panel_lut,
+    _http_error_message,
 )
 from hapapp_python.panels import MADCPanel
 
@@ -18,8 +22,10 @@ from hapapp_python.panels import MADCPanel
 class FakeGitHubClient:
     def __init__(self) -> None:
         self.downloads: list[Path] = []
+        self.requested_refs: list[str] = []
 
     def get_content(self, content_ref: GitHubContentRef) -> Any:
+        self.requested_refs.append(content_ref.ref)
         if content_ref.kind == "blob":
             return {
                 "type": "file",
@@ -71,6 +77,17 @@ class GitHubPanelFileTests(unittest.TestCase):
             ("https://github.com/example/private-panel", "main"),
         )
 
+    def test_reports_database_target_directory(self) -> None:
+        self.assertEqual(madc_panel_database_directory(_github_panel()), "data/versions")
+
+    def test_rejects_panel_inputs_from_different_repositories(self) -> None:
+        panel = _github_panel(
+            snpid_lut="https://github.com/example/other-panel/blob/main/data/snpid_lut.csv"
+        )
+
+        with self.assertRaisesRegex(PanelFileResolutionError, "one repository and branch"):
+            madc_panel_github_source(panel)
+
     def test_copies_local_panel_files_to_run_work_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -117,6 +134,20 @@ class GitHubPanelFileTests(unittest.TestCase):
             self.assertTrue(resolved.snpid_lut.is_file())
             self.assertTrue(all(path.is_relative_to(expected_dir) for path in client.downloads))
 
+    def test_downloads_every_panel_file_from_one_pinned_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            client = FakeGitHubClient()
+
+            resolve_madc_panel_files(
+                _github_panel(),
+                Path(tmp_dir) / "work",
+                github_client=client,
+                pinned_github_ref="commit-sha",
+            )
+
+        self.assertTrue(client.requested_refs)
+        self.assertEqual(set(client.requested_refs), {"commit-sha"})
+
     def test_resolves_only_github_lut_for_panel_identification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             work_dir = Path(tmp_dir) / "work"
@@ -133,6 +164,21 @@ class GitHubPanelFileTests(unittest.TestCase):
                 resolve_madc_panel_files(_github_panel(), Path(tmp_dir) / "work", github_token="")
 
         self.assertIn("HAPAPP_GITHUB_TOKEN", str(err.exception))
+
+    def test_github_401_error_points_to_token_configuration(self) -> None:
+        error = urllib.error.HTTPError(
+            "https://api.github.com/repos/example/private/contents/panel.csv",
+            401,
+            "Unauthorized",
+            {},
+            io.BytesIO(b'{"message": "Bad credentials"}'),
+        )
+
+        message = _http_error_message("GitHub API request failed", error.url, error)
+
+        self.assertIn("GitHub rejected HAPAPP_GITHUB_TOKEN", message)
+        self.assertIn("read access to the panel repository", message)
+        self.assertNotIn("Bad credentials", message)
 
     def test_rejects_mismatched_base_file_url_and_lut_directory_url(self) -> None:
         panel = _github_panel(

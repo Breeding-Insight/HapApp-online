@@ -5,7 +5,7 @@ import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from string import Template
 from typing import Any
 from urllib.parse import urlparse
@@ -32,6 +32,8 @@ class MADCPanel:
     cov: float
     iden: float
     code_ver: str
+    github_madc_dir: str | None = None
+    github_metadata_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +142,12 @@ def _parse_madc_panel(panel_id: str, raw_panel: Mapping[str, Any]) -> MADCPanel:
         raise ValueError(
             f"MADC panel {panel_id!r} must define both allele_db_indel and matchcnt_lut_indel, or neither."
         )
+    github_madc_dir = _panel_optional_repository_dir(raw_panel, "github_madc_dir", panel_id)
+    github_metadata_dir = _panel_optional_repository_dir(raw_panel, "github_metadata_dir", panel_id)
+    if bool(github_madc_dir) != bool(github_metadata_dir):
+        raise ValueError(
+            f"MADC panel {panel_id!r} must define both github_madc_dir and github_metadata_dir, or neither."
+        )
 
     return MADCPanel(
         panel_id=panel_id,
@@ -156,6 +164,8 @@ def _parse_madc_panel(panel_id: str, raw_panel: Mapping[str, Any]) -> MADCPanel:
         cov=_panel_number(raw_panel, "cov", panel_id),
         iden=_panel_number(raw_panel, "iden", panel_id),
         code_ver=_panel_string(raw_panel, "code_ver", panel_id),
+        github_madc_dir=github_madc_dir,
+        github_metadata_dir=github_metadata_dir,
     )
 
 
@@ -164,6 +174,19 @@ def _panel_string(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) 
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"MADC panel {panel_id!r} must define non-empty {field_name!r}.")
     return value.strip()
+
+
+def _panel_optional_repository_dir(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> str | None:
+    value = raw_panel.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"MADC panel {panel_id!r} has invalid optional value {field_name!r}.")
+    stripped = value.strip()
+    path = PurePosixPath(stripped)
+    if path.is_absolute() or "\\" in stripped or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError(f"MADC panel {panel_id!r} field {field_name!r} must be a relative repository directory.")
+    return path.as_posix()
 
 
 def _panel_file_ref(raw_panel: Mapping[str, Any], field_name: str, panel_id: str) -> PanelFileRef:

@@ -361,6 +361,13 @@ if [[ -f "$ALLELE_DB_DIR/$ALLELE_DB_NEW" ]]; then
     fi
 else
     printf "  # No new alleles found, therefore no new DB was generated.\n"
+    if [[ -f "$TMP_RENAME_UPDATED" ]]; then
+        MADC_CLEANED_VER=${REPORT_SNPID%????}'_rename_updatedSeq_'"$CODE_VER"'.csv'
+    else
+        MADC_CLEANED_VER=${REPORT_SNPID%????}'_rename_'"$CODE_VER"'.csv'
+    fi
+    awk -v val="$CODE_VER" 'NR==1{print "Code_version," $0} NR>1{print val "," $0}' "$MADC_CLEANED" > "$MADC_CLEANED_VER"
+    printf "  # Code version added as first column of output MADC.\n"
     mv "$PROCESS_README" "$NO_NEW_ALLELE_README"
 fi
 

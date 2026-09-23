@@ -141,6 +141,34 @@ code_ver = "v1"
 
         self.assertIn("must define both allele_db_indel and matchcnt_lut_indel", str(err.exception))
 
+    def test_loads_github_publication_directories_as_a_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "panels.toml"
+            config_path.write_text(
+                _panel_toml(
+                    extra_fields='github_madc_dir = "data/madc"\ngithub_metadata_dir = "data/metadata"'
+                ),
+                encoding="utf-8",
+            )
+
+            panel = load_madc_panels(config_path)["demo"]
+
+        self.assertEqual(panel.github_madc_dir, "data/madc")
+        self.assertEqual(panel.github_metadata_dir, "data/metadata")
+
+    def test_rejects_incomplete_or_unsafe_github_publication_directories(self) -> None:
+        invalid_fields = [
+            'github_madc_dir = "data/madc"',
+            'github_madc_dir = "../madc"\ngithub_metadata_dir = "data/metadata"',
+        ]
+        for extra_fields in invalid_fields:
+            with self.subTest(extra_fields=extra_fields), tempfile.TemporaryDirectory() as tmp_dir:
+                config_path = Path(tmp_dir) / "panels.toml"
+                config_path.write_text(_panel_toml(extra_fields=extra_fields), encoding="utf-8")
+
+                with self.assertRaises(ValueError):
+                    load_madc_panels(config_path)
+
     def test_reports_missing_configured_files(self) -> None:
         panel = MADCPanel(
             panel_id="demo",

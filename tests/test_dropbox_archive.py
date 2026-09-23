@@ -42,7 +42,7 @@ class DropboxArchiveTests(unittest.TestCase):
         FakeDropboxClient.uploads = []
 
     def test_skips_archive_when_dropbox_token_is_not_configured(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.dict(os.environ, {DROPBOX_TOKEN_ENV: ""}, clear=False):
+        with tempfile.TemporaryDirectory() as tmp_dir, patch.dict(os.environ, {DROPBOX_TOKEN_ENV: ""}, clear=True):
             messages = archive_madc_review_artifacts(FakeState(Path(tmp_dir)))
 
         self.assertEqual(messages, [f"Dropbox archive skipped because {DROPBOX_TOKEN_ENV} is not set."])
@@ -58,6 +58,7 @@ class DropboxArchiveTests(unittest.TestCase):
                 "HAPAPP_DROPBOX_MADC_FOLDER": "review",
                 "HAPAPP_DROPBOX_LOG_FOLDER": "/logs/",
             },
+            clear=True,
         ):
             config = dropbox_config_from_env()
 
@@ -70,7 +71,7 @@ class DropboxArchiveTests(unittest.TestCase):
         self.assertEqual(config.log_folder, "/logs")
 
     def test_blank_dropbox_token_disables_archive_config(self) -> None:
-        with patch.dict(os.environ, {DROPBOX_TOKEN_ENV: "   "}):
+        with patch.dict(os.environ, {DROPBOX_TOKEN_ENV: "   "}, clear=True):
             self.assertIsNone(dropbox_config_from_env())
 
     def test_refresh_token_config_can_replace_static_access_token(self) -> None:
@@ -81,6 +82,7 @@ class DropboxArchiveTests(unittest.TestCase):
                 DROPBOX_APP_SECRET_ENV: "app-secret",
                 DROPBOX_REFRESH_TOKEN_ENV: "refresh-token",
             },
+            clear=True,
         ):
             config = dropbox_config_from_env()
 
@@ -91,7 +93,7 @@ class DropboxArchiveTests(unittest.TestCase):
         self.assertEqual(config.refresh_token, "refresh-token")
 
     def test_partial_refresh_token_config_raises_helpful_error(self) -> None:
-        with patch.dict(os.environ, {DROPBOX_APP_KEY_ENV: "app-key"}):
+        with patch.dict(os.environ, {DROPBOX_APP_KEY_ENV: "app-key"}, clear=True):
             with self.assertRaisesRegex(Exception, "requires"):
                 dropbox_config_from_env()
 

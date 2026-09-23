@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from dash import no_update
 from dash.exceptions import PreventUpdate
 
 from hapapp_python.app import (
@@ -19,23 +20,29 @@ from hapapp_python.app import (
     _editable_submission_summary,
     _expected_new_madc_db_files,
     _fixed_madc_result_file,
+    _identify_uploaded_madc_panel,
     _list_files,
     _madc_previous_db_version,
     _madc_result_summary,
+    _madc_submission_confirmation_modal,
     _madc_submission_db_version,
     _panel_input_files,
     _record_submission_decision,
     _result_options,
+    _submission_package_files,
     _selected_submission_summary,
     _save_submission_metadata_edits,
     _snapshot_for_owner,
     _split_madc_result_options,
     _status_text,
     _sync_submission_state,
+    _publish_run_to_github,
     _write_run_metadata_file,
     _write_run_log_file,
     _zip_selected,
 )
+from hapapp_python.github_panel_files import PanelFileResolutionError
+from hapapp_python.github_submission import StaleGitHubBaseError
 from hapapp_python.madc_submission import (
     MADC_SUBMISSION_METADATA_FILENAME,
     MADCSubmissionState,
@@ -43,6 +50,8 @@ from hapapp_python.madc_submission import (
     write_submission_metadata,
 )
 from hapapp_python.panels import ResolvedMADCPanel
+from hapapp_python.panels import MADCPanel
+from hapapp_python.madc_validation import MADCPanelIdentificationError
 
 
 def _resolved_panel(work_dir: Path, allele_db_name: str = "alfalfa_allele_db_v010.fa") -> ResolvedMADCPanel:
@@ -53,6 +62,55 @@ def _resolved_panel(work_dir: Path, allele_db_name: str = "alfalfa_allele_db_v01
         snpid_lut=panel_dir / "snpid_lut.csv",
         allele_db_base=panel_dir / allele_db_name,
         matchcnt_lut_base=panel_dir / "alfalfa_allele_db_v010_matchCnt_lut.txt",
+        allele_db_indel=None,
+        matchcnt_lut_indel=None,
+        dup_tags=None,
+        first_sample_col=17,
+        design_len=54,
+        seq_len=81,
+        cov=90,
+        iden=85,
+        code_ver="v1",
+    )
+
+
+def _madc_for_marker(marker_id: str) -> str:
+    metadata_columns = (
+        "AlleleID",
+        "CloneID",
+        "AlleleSequence",
+        "ClusterConsensusSequence",
+        "CallRate",
+        "OneRatioRef",
+        "OneRatioSnp",
+        "FreqHomRef",
+        "FreqHomSnp",
+        "FreqHets",
+        "PICRef",
+        "PICSnp",
+        "AvgPIC",
+        "AvgCountRef",
+        "AvgCountSnp",
+        "RatioAvgCountRefAvgCountSnp",
+    )
+    preamble = ",".join(["*", *(["*"] * 15), "sample-a", "sample-b"])
+    header = ",".join([*metadata_columns, "sample-a", "sample-b"])
+    ref = ",".join(
+        [f"{marker_id}|Ref", marker_id, "ATCG", "ATCG", *["1"] * 12, "10", "12"]
+    )
+    alt = ",".join(
+        [f"{marker_id}|Alt", marker_id, "ATCC", "ATCC", *["1"] * 12, "11", "13"]
+    )
+    return "\n".join([preamble, header, ref, alt])
+
+
+def _madc_panel(panel_id: str, label: str, snpid_lut: Path | str) -> MADCPanel:
+    return MADCPanel(
+        panel_id=panel_id,
+        label=label,
+        snpid_lut=snpid_lut,
+        allele_db_base=Path("/panel/allele_db.fa"),
+        matchcnt_lut_base=Path("/panel/matchcnt_lut.txt"),
         allele_db_indel=None,
         matchcnt_lut_indel=None,
         dup_tags=None,
@@ -119,20 +177,59 @@ class AppResultTests(unittest.TestCase):
 
         self.assertEqual(expected, set())
 
-    def test_reads_proposed_database_version_from_main_fasta(self) -> None:
-        state = RunState(
-            run_id="run",
-            kind="MADC",
-            work_dir=Path("/work"),
-            input_files=set(),
-            command=[],
-            main_result_files={
-                "panel_files/alfalfa/alfalfa_allele_db_v011.fa",
-                "panel_files/alfalfa/alfalfa_allele_db_v011_matchCnt_lut.txt",
-            },
-        )
+    def test_uploaded_madc_panel_identification_reports_unavailable_panel_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            report = tmp_path / "DAl26-11931_MADC.csv"
+            demo_lut = tmp_path / "demo_lut.csv"
+            report.write_text(_madc_for_marker("alfalfa-marker"), encoding="utf-8")
+            demo_lut.write_text("Panel_markerID\nchestnut-marker\n", encoding="utf-8")
 
-        self.assertEqual(_madc_submission_db_version(state), "v011")
+            panels = {
+                "demo": _madc_panel("demo", "Demo panel", demo_lut),
+                "alfalfa": _madc_panel(
+                    "alfalfa",
+                    "Alfalfa 3k DArTag (v1.0)",
+                    "https://github.com/example/alfalfa/blob/main/snpid_lut.csv",
+                ),
+            }
+
+            def resolve_lut(panel: MADCPanel, work_dir: Path) -> Path:
+                if panel.panel_id == "alfalfa":
+                    raise PanelFileResolutionError("HAPAPP_GITHUB_TOKEN is not set")
+                return Path(panel.snpid_lut)
+
+            with (
+                patch("hapapp_python.app.load_madc_panels", return_value=panels),
+                patch("hapapp_python.app.resolve_madc_panel_lut", side_effect=resolve_lut),
+                self.assertRaises(MADCPanelIdentificationError) as err,
+            ):
+                _identify_uploaded_madc_panel(report)
+
+        message = str(err.exception)
+        self.assertIn("does not match any available species panel", message)
+        self.assertIn("Alfalfa 3k DArTag (v1.0)", message)
+        self.assertIn("HAPAPP_GITHUB_TOKEN is not set", message)
+
+    def test_reads_proposed_database_version_from_main_fasta(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            database = work_dir / "panel_files/alfalfa/alfalfa_allele_db_v011.fa"
+            database.parent.mkdir(parents=True)
+            database.write_text(">allele\nACGT\n", encoding="utf-8")
+            state = RunState(
+                run_id="run",
+                kind="MADC",
+                work_dir=work_dir,
+                input_files=set(),
+                command=[],
+                main_result_files={
+                    "panel_files/alfalfa/alfalfa_allele_db_v011.fa",
+                    "panel_files/alfalfa/alfalfa_allele_db_v011_matchCnt_lut.txt",
+                },
+            )
+
+            self.assertEqual(_madc_submission_db_version(state), "v011")
 
     def test_submission_summary_hides_internal_status_and_freshness(self) -> None:
         state = RunState(
@@ -201,6 +298,244 @@ class AppResultTests(unittest.TestCase):
             callbacks["cancel_madc_submission_metadata_edits"](None, None, [], [])
         with self.assertRaises(PreventUpdate):
             callbacks["save_madc_submission_metadata"](None, None, [], [], None, None, None, None, None, None)
+
+    def test_confirmation_explains_sharing_and_review(self) -> None:
+        modal = str(_madc_submission_confirmation_modal())
+
+        self.assertIn("agree to share the processed MADC", modal)
+        self.assertIn("Breeding Insight will review", modal)
+        self.assertIn("Agree, Share, and Download", modal)
+
+    def test_download_callback_waits_while_github_publication_is_in_flight(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            result_file = Path(tmp_dir) / "result.csv"
+            result_file.write_text("result", encoding="utf-8")
+            state = RunState(
+                run_id="run",
+                kind="MADC",
+                work_dir=Path(tmp_dir),
+                input_files=set(),
+                command=[],
+                owner_orcid_id="owner",
+                files=[result_file.name],
+                log=["Number of NEW alleles found in this report: 1"],
+                status="completed",
+                submission_status="publishing",
+            )
+            with RUNS_LOCK:
+                RUNS[state.run_id] = state
+
+            app = create_app()
+            callback = next(
+                callback.__wrapped__
+                for callback_data in app.callback_map.values()
+                if (callback := callback_data.get("callback")) is not None
+                and hasattr(callback, "__wrapped__")
+                and callback.__wrapped__.__name__ == "submit_and_download_madc"
+            )
+            with (
+                patch("hapapp_python.app.get_current_user", return_value={"orcid_id": "owner"}),
+                patch("hapapp_python.app._sync_submission_state"),
+                patch("hapapp_python.app._publish_run_to_github") as publish,
+                patch("hapapp_python.app.dcc.send_bytes") as send_bytes,
+            ):
+                result = callback({"run_id": "run", "selected": [result_file.name]})
+
+        self.assertIs(result, no_update)
+        publish.assert_not_called()
+        send_bytes.assert_not_called()
+
+    def test_local_panel_uses_review_submission_before_download(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            result_file = work_dir / "result.csv"
+            result_file.write_text("result", encoding="utf-8")
+            metadata = build_madc_submission_metadata(
+                run_id="run",
+                current_user={"orcid_id": "owner"},
+                submitter_profile=None,
+                submitted_for_name="Owner",
+                submitted_for_location="Location",
+                submitted_for_email="owner@example.org",
+                submitted_for_institution="Institution",
+                informal_project_name=None,
+                inferred_project_id="DAI-123456",
+                madc_filename="madc.csv",
+                panel_id="demo",
+                panel_label="Demo",
+            )
+            write_submission_metadata(work_dir, metadata)
+            state = RunState(
+                run_id="run",
+                kind="MADC",
+                work_dir=work_dir,
+                input_files=set(),
+                command=[],
+                owner_orcid_id="owner",
+                files=[result_file.name],
+                log=["Number of NEW alleles found in this report: 1"],
+                status="completed",
+            )
+            with RUNS_LOCK:
+                RUNS[state.run_id] = state
+
+            app = create_app()
+            callback = next(
+                callback.__wrapped__
+                for callback_data in app.callback_map.values()
+                if (callback := callback_data.get("callback")) is not None
+                and hasattr(callback, "__wrapped__")
+                and callback.__wrapped__.__name__ == "submit_and_download_madc"
+            )
+            with (
+                patch("hapapp_python.app.get_current_user", return_value={"orcid_id": "owner"}),
+                patch("hapapp_python.app._sync_submission_state"),
+                patch("hapapp_python.app.get_madc_panel", return_value=object()),
+                patch("hapapp_python.app.madc_panel_github_source", return_value=(None, None)),
+                patch("hapapp_python.app._record_submission_decision", return_value=True) as record,
+                patch("hapapp_python.app._publish_run_to_github") as publish,
+                patch("hapapp_python.app._archive_run_results") as archive,
+                patch("hapapp_python.app._zip_selected", return_value="zip-writer"),
+                patch("hapapp_python.app.dcc.send_bytes", return_value="download") as send_bytes,
+            ):
+                result = callback({"run_id": "run", "selected": [result_file.name]})
+
+        self.assertEqual(result, "download")
+        record.assert_called_once_with("run", "owner", "submitted_for_review")
+        publish.assert_not_called()
+        archive.assert_called_once()
+        send_bytes.assert_called_once()
+
+    def test_zero_new_alleles_are_shared_without_github_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            fixed_madc = work_dir / "DAl26-11931_MADC_snpID_rename_v1.csv"
+            fixed_madc.write_text("Code_version,AlleleID\nv1,marker|Ref_001\n", encoding="utf-8")
+            metadata = build_madc_submission_metadata(
+                run_id="run",
+                current_user={"orcid_id": "owner"},
+                submitter_profile=None,
+                submitted_for_name="Owner",
+                submitted_for_location="Location",
+                submitted_for_email="owner@example.org",
+                submitted_for_institution="Institution",
+                informal_project_name=None,
+                inferred_project_id="DAl26-11931",
+                madc_filename="DAl26-11931_MADC.csv",
+                panel_id="alfalfa",
+                panel_label="Alfalfa",
+                input_github_repository="https://github.com/example/alfalfa",
+                input_github_ref="main",
+                input_github_commit_sha="base-sha",
+            )
+            write_submission_metadata(work_dir, metadata)
+            state = RunState(
+                run_id="run",
+                kind="MADC",
+                work_dir=work_dir,
+                input_files={"panel_files/alfalfa/alfalfa_allele_db_v055.fa"},
+                command=[],
+                owner_orcid_id="owner",
+                main_result_files={
+                    "panel_files/alfalfa/alfalfa_allele_db_v056.fa",
+                    "panel_files/alfalfa/alfalfa_allele_db_v056_matchCnt_lut.txt",
+                },
+                files=[fixed_madc.name, MADC_SUBMISSION_METADATA_FILENAME],
+                fixed_madc_file=fixed_madc.name,
+                log=["Number of NEW alleles found in this report: 0"],
+                status="completed",
+            )
+            with RUNS_LOCK:
+                RUNS[state.run_id] = state
+
+            app = create_app()
+            callback = next(
+                callback.__wrapped__
+                for callback_data in app.callback_map.values()
+                if (callback := callback_data.get("callback")) is not None
+                and hasattr(callback, "__wrapped__")
+                and callback.__wrapped__.__name__ == "submit_and_download_madc"
+            )
+            with (
+                patch("hapapp_python.app.get_current_user", return_value={"orcid_id": "owner"}),
+                patch("hapapp_python.app._sync_submission_state"),
+                patch("hapapp_python.app._record_submission_decision", return_value=True) as record,
+                patch("hapapp_python.app._submission_uses_github_publication") as publication_mode,
+                patch("hapapp_python.app._publish_run_to_github") as publish,
+                patch("hapapp_python.app._archive_run_results") as archive,
+                patch("hapapp_python.app._zip_selected", return_value="zip-writer"),
+                patch("hapapp_python.app.dcc.send_bytes", return_value="download"),
+            ):
+                result = callback({"run_id": "run", "selected": [fixed_madc.name]})
+
+        self.assertEqual(result, "download")
+        record.assert_called_once_with("run", "owner", "submitted_for_review")
+        publication_mode.assert_not_called()
+        publish.assert_not_called()
+        archive.assert_called_once()
+
+    def test_zero_new_allele_package_excludes_missing_database_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            fixed_madc = work_dir / "DAl26-11931_MADC_snpID_rename_v1.csv"
+            fixed_madc.write_text("Code_version,AlleleID\nv1,marker|Ref_001\n", encoding="utf-8")
+            (work_dir / MADC_SUBMISSION_METADATA_FILENAME).write_text("{}\n", encoding="utf-8")
+            state = RunState(
+                run_id="run",
+                kind="MADC",
+                work_dir=work_dir,
+                input_files={"panel_files/alfalfa/alfalfa_allele_db_v055.fa"},
+                command=[],
+                main_result_files={
+                    "panel_files/alfalfa/alfalfa_allele_db_v056.fa",
+                    "panel_files/alfalfa/alfalfa_allele_db_v056_matchCnt_lut.txt",
+                },
+                files=[fixed_madc.name, MADC_SUBMISSION_METADATA_FILENAME],
+                fixed_madc_file=fixed_madc.name,
+                log=["Number of NEW alleles found in this report: 0"],
+                status="completed",
+            )
+
+            package = _submission_package_files(state)
+            summary = str(_selected_submission_summary(state, [fixed_madc.name]))
+
+        self.assertEqual(package, [fixed_madc.name, MADC_SUBMISSION_METADATA_FILENAME])
+        self.assertIsNone(_madc_submission_db_version(state))
+        self.assertIn("No novel alleles were found", summary)
+        self.assertIn("No GitHub commit", summary)
+        self.assertIn("No change (v055)", summary)
+
+    def test_stale_status_write_failure_releases_the_publication_claim(self) -> None:
+        state = RunState(
+            run_id="run",
+            kind="MADC",
+            work_dir=Path("/work"),
+            input_files=set(),
+            command=[],
+            owner_orcid_id="owner",
+            log=["Number of NEW alleles found in this report: 1"],
+            status="completed",
+        )
+        with RUNS_LOCK:
+            RUNS[state.run_id] = state
+
+        stale_error = StaleGitHubBaseError("expected-sha", "current-sha")
+        with (
+            patch("hapapp_python.app.claim_submission_for_publication", return_value=1),
+            patch("hapapp_python.app._github_source_from_state", side_effect=stale_error),
+            patch("hapapp_python.app.persist_submission_review_state", side_effect=RuntimeError("db unavailable")),
+            patch("hapapp_python.app.release_submission_publication_claim", return_value=1) as release,
+        ):
+            self.assertFalse(_publish_run_to_github("run", "owner"))
+
+        self.assertEqual(state.submission_status, "awaiting_decision")
+        self.assertEqual(state.freshness_status, "stale")
+        release.assert_called_once_with(
+            "run",
+            "owner",
+            str(stale_error),
+            freshness_status="stale",
+        )
 
     def test_saves_summary_metadata_edits_to_file_and_database(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -370,6 +705,9 @@ class AppResultTests(unittest.TestCase):
                 '{"panel_label": "Alfalfa", "submitted_for_name": "Project Owner"}',
                 encoding="utf-8",
             )
+            database = work_dir / "panel_files/alfalfa/alfalfa_allele_db_v011.fa"
+            database.parent.mkdir(parents=True)
+            database.write_text(">allele\nACGT\n", encoding="utf-8")
             state = RunState(
                 run_id="run-123",
                 kind="MADC hap assignment",
