@@ -68,7 +68,11 @@ cp config/production.env.example config/production.env
 docker compose -f docker-compose.yml -f docker-compose.production.yml up --build -d
 ```
 
-Before starting a deployment for the first time, run `schema_hapapp.sql` and then `permissions_hapapp.sql` on the SQL Server with a database-owner account. Both scripts explicitly target `HaploSearch`; the schema script creates the authorization table and all HapApp tables with the final GitHub publication states. The permissions script uses `hapapp_runtime_user` for development and production by default and automatically recognizes local Docker's `sa`/`dbo` connection. Set its optional override only when a server's `MSSQL_USER` has a different name. Production startup verifies the live `HaploSearch` publication constraint and fails clearly if the full schema has not been installed.
+Before starting a deployment for the first time, connect to its dedicated SQL Server application database and run `schema_hapapp.sql` followed by `permissions_hapapp.sql` with a database-owner account. The schema script creates the authorization table and all HapApp tables with the final GitHub publication states. The permissions script uses `hapapp_runtime_user` by default and recognizes a `dbo`/`db_owner` connection. Set its optional override only when the deployment's `MSSQL_USER` has a different name. Production startup verifies the configured database schema and fails clearly if the full schema has not been installed.
+
+## Google Cloud Run
+
+The container accepts Cloud Run's injected `PORT`, reads configuration directly from the process and Secret Manager without requiring a mounted `.env` file, and trusts Cloud Run's immediate proxy headers. A dedicated Cloud SQL for SQL Server database can be used instead of `HaploSearch`. See [docs/cloud-run.md](docs/cloud-run.md) for database bootstrap, ORCID callback, secrets, VPC networking, repository deployment, and the current single-instance processing constraint.
 
 ## Workflow
 

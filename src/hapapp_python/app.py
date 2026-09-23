@@ -30,6 +30,7 @@ from dash.dependencies import ClientsideFunction
 from dash.exceptions import PreventUpdate
 from dash_iconify import DashIconify
 from flask import Flask, redirect, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from hapapp_python import config
 from hapapp_python.auth import auth_bp, get_current_user, is_authenticated
@@ -171,6 +172,8 @@ class RunState:
 
 RUNS: dict[str, RunState] = {}
 RUNS_LOCK = threading.Lock()
+RUNTIME_PREPARE_LOCK = threading.Lock()
+RUNTIME_PREPARED = False
 
 
 def _safe_filename(filename: str | None, fallback: str) -> str:
@@ -1922,11 +1925,17 @@ def _landing_page() -> str:
 
 def create_server() -> Flask:
     server = Flask(__name__)
+    if os.environ.get("K_SERVICE") or os.environ.get("HAPAPP_TRUST_PROXY_HEADERS", "").lower() in {
+        "true",
+        "1",
+        "yes",
+    }:
+        server.wsgi_app = ProxyFix(server.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     server.secret_key = config.SECRET_KEY
     server.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=config.PUBLIC_URL.startswith("https://"),
+        SESSION_COOKIE_SECURE=config.PUBLIC_URL.startswith("https://") or bool(os.environ.get("K_SERVICE")),
     )
     server.register_blueprint(auth_bp)
 
@@ -2735,6 +2744,41 @@ def register_callbacks(app: Dash) -> None:
         state = _snapshot_for_owner(run_id, owner_orcid_id)
         return _status_class(state), not panel_id or _run_button_disabled(state), _run_button_children(state)
 
+def prepare_runtime() -> None:
+    """Perform one-time database and run-directory startup work for CLI or WSGI."""
+    global RUNTIME_PREPARED
+    with RUNTIME_PREPARE_LOCK:
+        if RUNTIME_PREPARED:
+            return
+
+        config.assert_cloud_run_configuration_ready()
+        RUN_BASE.mkdir(parents=True, exist_ok=True)
+        if config.DATABASE_PREFLIGHT:
+            assert_submission_publication_schema_ready()
+        if config.GITHUB_PUBLISHING_RECOVERY_ENABLED:
+            try:
+                recovery = recover_stranded_github_publications(
+                    config.GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS
+                )
+                for message in recovery.messages:
+                    if "deferred" in message or "failed" in message:
+                        LOGGER.warning(message)
+                    else:
+                        LOGGER.info(message)
+                LOGGER.info(
+                    "GitHub publication recovery inspected=%s incorporated=%s released=%s stale=%s unchanged=%s deferred=%s",
+                    recovery.inspected,
+                    recovery.incorporated,
+                    recovery.released,
+                    recovery.stale,
+                    recovery.unchanged,
+                    recovery.deferred,
+                )
+            except Exception:  # noqa: BLE001 - recovery must not prevent the web service from starting.
+                LOGGER.exception("Could not inspect stranded GitHub publication claims during startup.")
+        RUNTIME_PREPARED = True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the HapApp Dash app")
     parser.add_argument("--host", default=config.APP_HOST)
@@ -2743,27 +2787,7 @@ def main() -> None:
     parser.add_argument("--no-open", action="store_true", help="Do not open the app in the default browser")
     args = parser.parse_args()
 
-    RUN_BASE.mkdir(parents=True, exist_ok=True)
-    if config.DATABASE_PREFLIGHT:
-        assert_submission_publication_schema_ready()
-    if config.GITHUB_PUBLISHING_RECOVERY_ENABLED:
-        try:
-            recovery = recover_stranded_github_publications(
-                config.GITHUB_PUBLISHING_RECOVERY_AGE_SECONDS
-            )
-            for message in recovery.messages:
-                LOGGER.warning(message) if "deferred" in message or "failed" in message else LOGGER.info(message)
-            LOGGER.info(
-                "GitHub publication recovery inspected=%s incorporated=%s released=%s stale=%s unchanged=%s deferred=%s",
-                recovery.inspected,
-                recovery.incorporated,
-                recovery.released,
-                recovery.stale,
-                recovery.unchanged,
-                recovery.deferred,
-            )
-        except Exception:  # noqa: BLE001 - recovery must not prevent the web service from starting.
-            LOGGER.exception("Could not inspect stranded GitHub publication claims during startup.")
+    prepare_runtime()
     app = create_app()
     if not args.no_open:
         scheme = "https" if config.SSL_CONTEXT else "http"

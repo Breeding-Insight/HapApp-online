@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 APP_ENV = os.getenv("APP_ENV", os.getenv("HAPAPP_APP_ENV", "development"))
 
 APP_HOST = os.getenv("HAPAPP_HOST", "127.0.0.1")
-APP_PORT = int(os.getenv("HAPAPP_PORT", "8050"))
+APP_PORT = int(os.getenv("PORT", os.getenv("HAPAPP_PORT", "8050")))
 DEBUG_MODE = os.getenv("HAPAPP_DEBUG", "0").lower() in ("true", "1", "yes")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
 PUBLIC_URL = os.getenv("HAPAPP_PUBLIC_URL", "").rstrip("/")
@@ -24,7 +24,7 @@ LOCAL_USER_NAME = os.getenv("HAPAPP_LOCAL_USER_NAME", "Local Developer")
 LOCAL_USER_ROLE = os.getenv("HAPAPP_LOCAL_USER_ROLE", "user")
 
 DATABASE_SERVER = os.getenv("MSSQL_SERVER", "localhost")
-DATABASE_NAME = os.getenv("MSSQL_DATABASE", "HaploSearch")
+DATABASE_NAME = os.getenv("MSSQL_DATABASE", "HapApp")
 DATABASE_USER = os.getenv("MSSQL_USER", "hapapp_runtime_user")
 DATABASE_PASSWORD = os.getenv("MSSQL_PASSWORD", "")
 DATABASE_DRIVER = os.getenv("MSSQL_DRIVER", "ODBC Driver 18 for SQL Server")
@@ -69,3 +69,25 @@ else:
 
 ORCID_AUTHORIZE_URL = f"{ORCID_BASE_URL}/oauth/authorize"
 ORCID_TOKEN_URL = f"{ORCID_BASE_URL}/oauth/token"
+
+
+def assert_cloud_run_configuration_ready() -> None:
+    """Fail closed when a Cloud Run revision is missing security-critical settings."""
+    if not os.environ.get("K_SERVICE"):
+        return
+
+    errors: list[str] = []
+    if APP_ENV != "production":
+        errors.append("APP_ENV must be production")
+    if PUBLIC_URL and not PUBLIC_URL.startswith("https://"):
+        errors.append("HAPAPP_PUBLIC_URL must use HTTPS when it is configured")
+    if SECRET_KEY in {"", "dev-secret-change-in-production", "change-me"} or len(SECRET_KEY) < 32:
+        errors.append("SECRET_KEY must be a strong Secret Manager value of at least 32 characters")
+    if not ORCID_CLIENT_ID or not ORCID_CLIENT_SECRET:
+        errors.append("ORCID_CLIENT_ID and ORCID_CLIENT_SECRET must be configured")
+    if TLS_ENABLED:
+        errors.append("TLS_ENABLED must be false because Cloud Run terminates TLS")
+    if DATABASE_NAME.casefold() in {"master", "model", "msdb", "tempdb"}:
+        errors.append("MSSQL_DATABASE must name the dedicated HapApp application database")
+    if errors:
+        raise RuntimeError("Invalid Cloud Run configuration: " + "; ".join(errors))

@@ -1,12 +1,9 @@
 -- Complete HapApp Microsoft SQL Server schema for a fresh installation.
--- This script deliberately targets HaploSearch so the objects cannot be created
--- in whichever database happens to be selected in the SQL client.
+-- Connect directly to the dedicated HapApp database before running this script.
+-- The database name is intentionally configurable for Cloud SQL deployments.
 
-USE [HaploSearch];
-GO
-
-IF DB_NAME() <> N'HaploSearch'
-    THROW 50000, 'schema_hapapp.sql must run in the HaploSearch database.', 1;
+IF DB_NAME() IN (N'master', N'model', N'msdb', N'tempdb')
+    THROW 50000, 'Connect to the dedicated HapApp application database before running schema_hapapp.sql.', 1;
 GO
 
 IF OBJECT_ID('dbo.users', 'U') IS NULL
@@ -128,18 +125,18 @@ IF NOT EXISTS (
 GO
 
 IF OBJECT_ID('dbo.users', 'U') IS NULL
-    THROW 50001, 'HaploSearch bootstrap failed: dbo.users is missing.', 1;
+    THROW 50001, 'HapApp database bootstrap failed: dbo.users is missing.', 1;
 IF OBJECT_ID('hapapp.orcid_profiles', 'U') IS NULL
-    THROW 50002, 'HaploSearch bootstrap failed: hapapp.orcid_profiles is missing.', 1;
+    THROW 50002, 'HapApp database bootstrap failed: hapapp.orcid_profiles is missing.', 1;
 IF OBJECT_ID('hapapp.madc_submissions', 'U') IS NULL
-    THROW 50003, 'HaploSearch bootstrap failed: hapapp.madc_submissions is missing.', 1;
+    THROW 50003, 'HapApp database bootstrap failed: hapapp.madc_submissions is missing.', 1;
 IF NOT EXISTS (
     SELECT 1 FROM sys.check_constraints
     WHERE name = 'CK_hapapp_madc_submissions_status'
       AND parent_object_id = OBJECT_ID('hapapp.madc_submissions')
       AND definition LIKE '%publishing%'
 )
-    THROW 50004, 'HaploSearch bootstrap failed: publishing status is missing.', 1;
+    THROW 50004, 'HapApp database bootstrap failed: publishing status is missing.', 1;
 
 SELECT
     DB_NAME() AS database_name,

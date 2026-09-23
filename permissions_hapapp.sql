@@ -3,11 +3,8 @@
 -- account. This is separate from schema_hapapp.sql so schema creation can be
 -- run by users who cannot manage database roles or grants.
 
-USE [HaploSearch];
-GO
-
-IF DB_NAME() <> N'HaploSearch'
-    THROW 50000, 'permissions_hapapp.sql must run in the HaploSearch database.', 1;
+IF DB_NAME() IN (N'master', N'model', N'msdb', N'tempdb')
+    THROW 50000, 'Connect to the dedicated HapApp application database before running permissions_hapapp.sql.', 1;
 IF OBJECT_ID('dbo.users', 'U') IS NULL
     THROW 50001, 'dbo.users is missing. Run schema_hapapp.sql first.', 1;
 IF OBJECT_ID('hapapp.madc_submissions', 'U') IS NULL
@@ -35,14 +32,14 @@ DECLARE @hapapp_runtime_user SYSNAME = COALESCE(
         ELSE NULL
     END
 );
-DECLARE @local_sysadmin BIT = CASE
-    WHEN IS_SRVROLEMEMBER(N'sysadmin') = 1 AND USER_NAME() = N'dbo' THEN 1
+DECLARE @database_owner BIT = CASE
+    WHEN USER_NAME() = N'dbo' OR IS_MEMBER(N'db_owner') = 1 THEN 1
     ELSE 0
 END;
 
--- Local Docker connects as sa, which maps to dbo and already has every database
--- permission. Adding sa/dbo to a lesser database role is neither needed nor valid.
-IF @hapapp_runtime_user IS NULL AND @local_sysadmin = 0
+-- Local Docker and a Cloud SQL administrative user can already own the database.
+-- Adding dbo/a db_owner member to a lesser role is neither needed nor useful.
+IF @hapapp_runtime_user IS NULL AND @database_owner = 0
     THROW 50003, 'No HapApp runtime principal was found. Set @hapapp_runtime_user_override to match MSSQL_USER.', 1;
 
 IF @hapapp_runtime_user IS NOT NULL
@@ -70,7 +67,7 @@ ELSE
 BEGIN
     SELECT
         DB_NAME() AS database_name,
-        N'local_sysadmin' AS permission_mode,
+        N'database_owner' AS permission_mode,
         CAST(NULL AS SYSNAME) AS database_role,
         SUSER_SNAME() AS runtime_member;
 END;

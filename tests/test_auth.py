@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -37,6 +38,28 @@ class AuthTests(unittest.TestCase):
         self.assertIn(
             "redirect_uri=https%3A%2F%2Fhapapp.example%2Fauth%2Fcallback",
             location,
+        )
+
+    def test_cloud_run_proxy_headers_produce_https_orcid_callback(self) -> None:
+        with patch.dict(os.environ, {"K_SERVICE": "hapapp"}):
+            server = create_server()
+        client = server.test_client()
+
+        self.assertTrue(server.config["SESSION_COOKIE_SECURE"])
+
+        with patch.object(config, "ORCID_CLIENT_ID", "client"), patch.object(config, "PUBLIC_URL", ""):
+            response = client.get(
+                "/auth/login",
+                headers={
+                    "X-Forwarded-Proto": "https",
+                    "X-Forwarded-Host": "hapapp-xyz.a.run.app",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            "redirect_uri=https%3A%2F%2Fhapapp-xyz.a.run.app%2Fauth%2Fcallback",
+            response.headers["Location"],
         )
 
     def test_callback_rejects_invalid_state(self) -> None:

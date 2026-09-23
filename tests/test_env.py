@@ -90,6 +90,21 @@ class EnvTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Missing required environment file"):
                 app_env.load_env()
 
+    def test_cloud_run_uses_process_environment_without_a_dotenv_file(self) -> None:
+        with patch.object(app_env, "_LOADED", False), patch.dict(
+            os.environ,
+            {
+                "K_SERVICE": "hapapp",
+                "HAPAPP_PUBLIC_URL": "https://hapapp.example",
+                "HAPAPP_GITHUB_TOKEN": "injected-token",
+            },
+            clear=True,
+        ), patch("hapapp_python.env._find_env_file") as find_env:
+            app_env.load_env()
+
+            self.assertEqual(os.environ["HAPAPP_GITHUB_TOKEN"], "injected-token")
+            find_env.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

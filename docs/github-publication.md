@@ -97,10 +97,11 @@ unreachable objects according to its own retention policy.
 Before production rollout:
 
 1. Confirm each species repository's `github_madc_dir` and `github_metadata_dir`.
-2. Run `schema_hapapp.sql` and then `permissions_hapapp.sql` with a database-owner
-   account. Both scripts explicitly select `HaploSearch`. The permissions script uses
-   `hapapp_runtime_user` by default, recognizes local Docker's `sa`/`dbo` connection,
-   and exposes one override for servers whose `MSSQL_USER` has a different name.
+2. Connect to the deployment's dedicated application database and run
+   `schema_hapapp.sql` followed by `permissions_hapapp.sql` with a database-owner
+   account. The permissions script uses `hapapp_runtime_user` by default, recognizes
+   a `dbo`/`db_owner` connection, and exposes one override for deployments whose
+   `MSSQL_USER` has a different name.
 3. Add a GitHub App token provider with automatic installation-token refresh, then
    replace the initially configured fine-grained token.
 4. Add an external worker/queue if publication latency should be removed from the

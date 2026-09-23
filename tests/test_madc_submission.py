@@ -233,7 +233,7 @@ class MADCSubmissionTests(unittest.TestCase):
         db = Mock()
         db.execute_query.return_value = [
             {
-                "database_name": "HaploSearch",
+                "database_name": "HapApp",
                 "users_object_id": 1,
                 "profiles_object_id": 2,
                 "submissions_object_id": 3,
@@ -253,7 +253,7 @@ class MADCSubmissionTests(unittest.TestCase):
         db = Mock()
         db.execute_query.return_value = [
             {
-                "database_name": "HaploSearch",
+                "database_name": "HapApp",
                 "users_object_id": 1,
                 "profiles_object_id": 2,
                 "submissions_object_id": 3,
@@ -264,7 +264,7 @@ class MADCSubmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Run `schema_hapapp.sql`"):
             assert_submission_publication_schema_ready(db)
 
-    def test_publication_schema_preflight_rejects_wrong_database(self) -> None:
+    def test_publication_schema_preflight_rejects_system_database(self) -> None:
         db = Mock()
         db.execute_query.return_value = [
             {
@@ -276,7 +276,7 @@ class MADCSubmissionTests(unittest.TestCase):
             }
         ]
 
-        with self.assertRaisesRegex(RuntimeError, "complete HaploSearch schema"):
+        with self.assertRaisesRegex(RuntimeError, "complete HapApp schema"):
             assert_submission_publication_schema_ready(db)
 
     def test_reads_submission_review_state(self) -> None:

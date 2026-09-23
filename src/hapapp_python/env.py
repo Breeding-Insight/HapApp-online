@@ -20,6 +20,10 @@ def load_env() -> None:
     if _LOADED:
         return
 
+    if _uses_process_environment():
+        _LOADED = True
+        return
+
     env_path = _find_env_file()
     if env_path is None:
         raise RuntimeError("Missing required environment file. Copy config/local.env.example to config/local.env.")
@@ -27,6 +31,13 @@ def load_env() -> None:
     _clear_hapapp_environment()
     load_dotenv(env_path, override=False)
     _LOADED = True
+
+
+def _uses_process_environment() -> bool:
+    """Cloud Run and similar platforms inject configuration without a dotenv file."""
+    return bool(os.environ.get("K_SERVICE")) or os.environ.get(
+        "HAPAPP_ENV_FROM_PROCESS", ""
+    ).lower() in {"true", "1", "yes"}
 
 
 def _find_env_file() -> Path | None:

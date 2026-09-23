@@ -53,10 +53,11 @@ def assert_submission_publication_schema_ready(db: DatabaseManager | None = None
         for key in ("users_object_id", "profiles_object_id", "submissions_object_id")
     )
     definition = str(state.get("status_constraint_definition") or "")
-    if database_name.casefold() != "haplosearch" or not required_objects_exist or "publishing" not in definition:
+    system_databases = {"master", "model", "msdb", "tempdb"}
+    if database_name.casefold() in system_databases or not required_objects_exist or "publishing" not in definition:
         raise RuntimeError(
-            "The configured SQL Server connection does not have the complete HaploSearch schema. "
-            "Run `schema_hapapp.sql` against the server's HaploSearch database "
+            "The configured SQL Server connection does not have the complete HapApp schema. "
+            "Run `schema_hapapp.sql` against the dedicated application database "
             "before accepting GitHub submissions."
         )
 
