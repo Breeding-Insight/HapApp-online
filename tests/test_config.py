@@ -73,7 +73,8 @@ class ConfigTests(unittest.TestCase):
             "TLS_ENABLED": "false",
             "ORCID_CLIENT_ID": "client",
             "ORCID_CLIENT_SECRET": "secret",
-            "MSSQL_DATABASE": "HapApp",
+            "HAPAPP_DATASTORE": "firestore",
+            "FIRESTORE_DATABASE": "hapapp-db",
             "PYTHONPATH": str(project_root / "src"),
         }
 
@@ -91,6 +92,38 @@ class ConfigTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_cloud_run_rejects_a_non_firestore_backend(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        env = {
+            **os.environ,
+            "K_SERVICE": "hapapp",
+            "APP_ENV": "production",
+            "HAPAPP_LOCAL_AUTH_BYPASS": "0",
+            "HAPAPP_DATASTORE": "sqlserver",
+            "FIRESTORE_DATABASE": "hapapp-db",
+            "SECRET_KEY": "0123456789abcdef0123456789abcdef",
+            "TLS_ENABLED": "false",
+            "ORCID_CLIENT_ID": "client",
+            "ORCID_CLIENT_SECRET": "secret",
+            "PYTHONPATH": str(project_root / "src"),
+        }
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from hapapp_python import config; config.assert_cloud_run_configuration_ready()",
+            ],
+            cwd=project_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HAPAPP_DATASTORE must be firestore", result.stderr)
 
     def test_tls_enabled_sets_ssl_context(self) -> None:
         project_root = Path(__file__).resolve().parents[1]

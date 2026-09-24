@@ -113,21 +113,14 @@ class AuthTests(unittest.TestCase):
             self.assertEqual(session["user_name"], "Dr. Jane Doe")
             self.assertEqual(session["user_role"], "user")
 
-    def test_user_lookup_is_read_only_and_uses_hapsearch_owned_table(self) -> None:
+    def test_user_lookup_reads_the_active_orcid_document(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [{"orcid_id": "0000-0001-2345-6789"}]
+        db.get_active_user.return_value = {"orcid_id": "0000-0001-2345-6789"}
 
         user = lookup_user("0000-0001-2345-6789", db)
 
         self.assertEqual(user, {"orcid_id": "0000-0001-2345-6789"})
-        self.assertEqual(
-            db.execute_query.call_args.args,
-            (
-                "SELECT * FROM dbo.users WHERE orcid_id = ? AND is_active = 1",
-                ("0000-0001-2345-6789",),
-            ),
-        )
-        db.execute_update.assert_not_called()
+        db.get_active_user.assert_called_once_with("0000-0001-2345-6789")
 
     def test_app_redirects_unauthenticated_app_post_but_allows_assets_get(self) -> None:
         server = create_server()

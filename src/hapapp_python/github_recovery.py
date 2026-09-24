@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from hapapp_python.database import DatabaseManager
+from hapapp_python.database import FirestoreRepository
 from hapapp_python.github_submission import (
     GitHubGitDataClient,
     GitHubPublicationError,
@@ -33,11 +33,11 @@ class GitHubRecoveryReport:
 def recover_stranded_github_publications(
     minimum_age_seconds: int,
     *,
-    db: DatabaseManager | None = None,
+    db: FirestoreRepository | None = None,
     client: GitHubGitDataClient | None = None,
 ) -> GitHubRecoveryReport:
     """Reconcile expired durable claims against the authoritative GitHub branch."""
-    manager = db or DatabaseManager()
+    manager = db or FirestoreRepository()
     submissions = list_stranded_publishing_submissions(minimum_age_seconds, manager)
     report = GitHubRecoveryReport(inspected=len(submissions))
 
@@ -57,7 +57,7 @@ def recover_stranded_github_publications(
 def _recover_one(
     submission: StrandedPublishingSubmission,
     report: GitHubRecoveryReport,
-    db: DatabaseManager,
+    db: FirestoreRepository,
     client: GitHubGitDataClient | None,
 ) -> None:
     repository_url = submission.input_github_repository
@@ -128,7 +128,7 @@ def _recover_one(
 def _record_release(
     submission: StrandedPublishingSubmission,
     report: GitHubRecoveryReport,
-    db: DatabaseManager,
+    db: FirestoreRepository,
     reason: str,
 ) -> None:
     updated = release_submission_publication_claim(

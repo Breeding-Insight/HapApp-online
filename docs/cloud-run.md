@@ -1,24 +1,48 @@
 # Cloud Run deployment
 
-This deployment uses one Cloud Run service, a dedicated Cloud SQL for SQL Server
-database, ORCID OAuth, GitHub, Dropbox, Secret Manager, and Direct VPC egress.
-It does not use the existing `HaploSearch` database.
+This deployment uses one Cloud Run service, a Firestore Standard database, ORCID
+OAuth, GitHub, Dropbox, Secret Manager, and a dedicated Cloud Run service identity.
+It does not require Cloud SQL, a VPC connector, or SQL credentials.
 
-## 1. Database
+## 1. Firestore
 
-Create a Cloud SQL for SQL Server instance with private IP and create a dedicated
-database such as `HapApp`. Connect directly to that database as its owner and run:
+Create a Firestore Standard database in Native mode. The production deployment uses:
 
-1. `schema_hapapp.sql`
-2. `permissions_hapapp.sql`
-3. An `INSERT` into `dbo.users` for each ORCID iD allowed to sign in.
+```text
+database ID: hapapp-db
+location: us-west1
+security rules: restrictive
+```
 
-The SQL scripts deliberately operate on the currently selected application database
-and refuse to run in `master`, `model`, `msdb`, or `tempdb`. Set `MSSQL_DATABASE` to
-the dedicated database name. The Cloud Run service must use Direct VPC egress to the
-VPC containing the Cloud SQL private IP.
+HapApp accesses Firestore only from its Python server through Google IAM. Browser and
+mobile rules should deny all direct reads and writes. Seed each allowed ORCID account
+as `users/{orcid_id}` with at least:
 
-## 2. ORCID
+```json
+{
+  "orcid_id": "0000-0000-0000-0000",
+  "display_name": "Example User",
+  "role": "admin",
+  "is_active": true
+}
+```
+
+The application creates and maintains `orcid_profiles`, `madc_submissions`, and
+`submission_keys`. The last collection provides a transactional uniqueness claim for
+normalized MADC filename and formal project ID pairs.
+
+## 2. Service identity
+
+Create a user-managed service account such as `hapapp-cloud-run` and grant it:
+
+- `roles/datastore.user` on the project
+- `roles/secretmanager.secretAccessor` on each HapApp secret
+
+Attach that account as the Cloud Run service identity. Do not create a JSON service
+account key and do not set `GOOGLE_APPLICATION_CREDENTIALS` in Cloud Run; the Python
+Firestore client uses Application Default Credentials from the attached identity.
+
+## 3. ORCID
 
 Create a separate production ORCID application for this deployment. Its redirect URI
 must exactly match:
@@ -27,50 +51,60 @@ must exactly match:
 https://YOUR-CLOUD-RUN-OR-CUSTOM-DOMAIN/auth/callback
 ```
 
-You may set the same origin as `HAPAPP_PUBLIC_URL`. When it is omitted, HapApp uses
-Cloud Run's trusted forwarded HTTPS host to construct the callback. Store
-`ORCID_CLIENT_ID` and `ORCID_CLIENT_SECRET` in Secret Manager. Cloud Run terminates
-HTTPS, so keep `TLS_ENABLED=false` inside the container.
+Set the same origin as `HAPAPP_PUBLIC_URL`. Store `ORCID_CLIENT_ID` and
+`ORCID_CLIENT_SECRET` in Secret Manager. Cloud Run terminates HTTPS, so keep
+`TLS_ENABLED=false` inside the container.
 
-## 3. Secrets and environment
+## 4. Secrets and environment
 
-Use `config/cloudrun.env.example` as the non-secret environment-variable checklist.
-Create Secret Manager secrets for at least:
+Use `config/cloudrun.env.example` as the non-secret environment checklist. Create
+Secret Manager secrets for at least:
 
 - `SECRET_KEY` (a random value of at least 32 characters)
-- `MSSQL_PASSWORD`
 - `ORCID_CLIENT_ID`
 - `ORCID_CLIENT_SECRET`
 - `HAPAPP_GITHUB_TOKEN`
 - the configured Dropbox credentials
 
+The required Firestore variables are:
+
+```text
+HAPAPP_DATASTORE=firestore
+HAPAPP_DATASTORE_PREFLIGHT=true
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
+FIRESTORE_DATABASE=hapapp-db
+```
+
 Cloud Run injects configuration directly into the process; no mounted `.env` file is
-required. The app fails closed when its strong session secret or ORCID credentials
-are missing from a Cloud Run revision, or when an explicitly configured public URL
-does not use HTTPS.
+required. Startup performs an authenticated Firestore read and fails clearly when the
+database name or service-account permission is incorrect.
 
-## 4. Service settings
+## 5. Service settings
 
-For the current polling and background-processing implementation, use these settings:
+For the current polling and background-processing implementation, use:
 
-- container port: `8080` (the app honors Cloud Run's injected `PORT`)
+- container port: `8080`
 - minimum instances: `1`
 - maximum instances: `1`
-- instance-based CPU allocation (no CPU throttling)
+- instance-based CPU allocation
 - session affinity: enabled
 - startup CPU boost: enabled
 - request timeout: `3600` seconds
-- one application process
+- concurrency: `8`
+- CPU: `2`
+- memory: `4 GiB`
+- second-generation execution environment
 - public ingress, with application access controlled by ORCID
-- Direct VPC egress for private Cloud SQL traffic
+- no Cloud SQL connection and no VPC connection solely for Firestore
 
-Example one-time deployment flags, after replacing the uppercase values:
+Example deployment flags, after replacing uppercase values:
 
 ```bash
-gcloud run deploy hapapp \
+gcloud run deploy hapapp-online \
   --source . \
-  --region=REGION \
+  --region=us-west1 \
   --allow-unauthenticated \
+  --service-account=hapapp-cloud-run@PROJECT_ID.iam.gserviceaccount.com \
   --port=8080 \
   --min=1 \
   --max=1 \
@@ -81,33 +115,26 @@ gcloud run deploy hapapp \
   --cpu-boost \
   --no-cpu-throttling \
   --session-affinity \
-  --network=VPC_NETWORK \
-  --subnet=VPC_SUBNET \
-  --vpc-egress=private-ranges-only \
-  --set-env-vars="APP_ENV=production,HAPAPP_ENV_FROM_PROCESS=1,TLS_ENABLED=false,MSSQL_SERVER=SQL_PRIVATE_IP,MSSQL_PORT=1433,MSSQL_DATABASE=HapApp,MSSQL_USER=hapapp_runtime_user,MSSQL_DRIVER=/app/.pixi/envs/default/lib/libtdsodbc.so,HAPAPP_DATABASE_PREFLIGHT=true,HAPAPP_GITHUB_PUBLISHING_RECOVERY_ENABLED=true,HAPAPP_TEST_ALFALFA_PANEL_REPO=https://github.com/ORG/SPECIES_REPOSITORY" \
-  --set-secrets="SECRET_KEY=hapapp-session-secret:latest,MSSQL_PASSWORD=hapapp-sql-password:latest,ORCID_CLIENT_ID=hapapp-orcid-client-id:latest,ORCID_CLIENT_SECRET=hapapp-orcid-client-secret:latest,HAPAPP_GITHUB_TOKEN=hapapp-github-token:latest"
+  --set-env-vars="APP_ENV=production,HAPAPP_ENV_FROM_PROCESS=1,HAPAPP_PUBLIC_URL=https://YOUR_SERVICE_URL,TLS_ENABLED=false,HAPAPP_DATASTORE=firestore,HAPAPP_DATASTORE_PREFLIGHT=true,GOOGLE_CLOUD_PROJECT=PROJECT_ID,FIRESTORE_DATABASE=hapapp-db,HAPAPP_GITHUB_PUBLISHING_RECOVERY_ENABLED=true,HAPAPP_TEST_ALFALFA_PANEL_REPO=https://github.com/ORG/SPECIES_REPOSITORY" \
+  --set-secrets="SECRET_KEY=hapapp-session-secret:latest,ORCID_CLIENT_ID=hapapp-orcid-client-id:latest,ORCID_CLIENT_SECRET=hapapp-orcid-client-secret:latest,HAPAPP_GITHUB_TOKEN=hapapp-github-token:latest"
 ```
 
-Apply the remaining Dropbox settings from `config/cloudrun.env.example` when that
-archive is enabled. After the first deployment, register the displayed HTTPS service
-URL plus `/auth/callback` in the dedicated ORCID application. You may also save that
-origin as `HAPAPP_PUBLIC_URL`. Do not commit real credentials.
+Apply the Dropbox variables and secrets from `config/cloudrun.env.example` when the
+archive is enabled. Do not commit real credentials.
 
-## 5. Repository deployment
+## 6. Repository deployment
 
-The root `Dockerfile` follows the Cloud Run container contract and the application
-honors Cloud Run's injected `PORT`. In Cloud Run, choose **Connect repository**,
-select this repository and branch, and choose **Dockerfile** as the build type.
-Alternatively, create a Cloud Build trigger using `cloudbuild.yaml` after the service
-has received its one-time networking, environment, secret, and scaling configuration.
-Subsequent builds update only the deployed image.
+The root `Dockerfile` follows the Cloud Run container contract and honors the injected
+`PORT`. In Cloud Run, connect this repository and the `cloud_run` branch, and choose
+the root `Dockerfile` as the build type. Alternatively, create a Cloud Build trigger
+using `cloudbuild.yaml` after the service has received its one-time identity,
+environment, secret, and scaling configuration.
 
 ## Current scaling boundary
 
-The run registry and active workflow threads are still process-local. Keeping exactly
-one warm instance with CPU always allocated makes the existing workflow usable on
-Cloud Run, but it does not make an in-flight MADC workflow survive a platform restart.
-The GitHub `publishing` claim is recoverable, but preprocessing itself is not yet a
-durable Cloud Run Job. Do not raise maximum instances above one until run files and
-workflow state are moved to Cloud Storage/SQL and processing is dispatched to Cloud
-Run Jobs.
+Firestore makes authorization, duplicate detection, publication claims, and recovery
+durable and safe across instances. The run registry and active workflow files are
+still process-local. Keeping exactly one warm instance with CPU always allocated makes
+the current workflow usable on Cloud Run, but it does not make in-flight preprocessing
+survive a platform restart. Do not raise maximum instances above one until run files
+move to Cloud Storage and processing is dispatched to durable Cloud Run Jobs.

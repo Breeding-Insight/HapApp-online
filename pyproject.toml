@@ -15,8 +15,8 @@ dependencies = [
   "dash-bootstrap-components",
   "dash-iconify",
   "dash-uploader>=0.6.1,<0.7",
+  "google-cloud-firestore>=2.21,<3",
   "pandas",
-  "pyodbc",
   "python-dotenv",
   "requests",
 ]

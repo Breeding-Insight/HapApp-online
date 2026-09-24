@@ -23,28 +23,11 @@ LOCAL_USER_ORCID_ID = os.getenv("HAPAPP_LOCAL_USER_ORCID_ID", "local-dev-user")
 LOCAL_USER_NAME = os.getenv("HAPAPP_LOCAL_USER_NAME", "Local Developer")
 LOCAL_USER_ROLE = os.getenv("HAPAPP_LOCAL_USER_ROLE", "user")
 
-DATABASE_SERVER = os.getenv("MSSQL_SERVER", "localhost")
-DATABASE_NAME = os.getenv("MSSQL_DATABASE", "HapApp")
-DATABASE_USER = os.getenv("MSSQL_USER", "hapapp_runtime_user")
-DATABASE_PASSWORD = os.getenv("MSSQL_PASSWORD", "")
-DATABASE_DRIVER = os.getenv("MSSQL_DRIVER", "ODBC Driver 18 for SQL Server")
-DATABASE_PORT = os.getenv("MSSQL_PORT", "1433")
-
-if DATABASE_DRIVER == "FreeTDS" or DATABASE_DRIVER.endswith("libtdsodbc.so"):
-    _conn_opts = (
-        f"DRIVER={{{DATABASE_DRIVER}}};SERVER={DATABASE_SERVER};PORT={DATABASE_PORT};"
-        f"DATABASE={DATABASE_NAME};UID={DATABASE_USER};PWD={DATABASE_PASSWORD};TDS_Version=7.4"
-    )
-else:
-    _conn_opts = (
-        f"DRIVER={{{DATABASE_DRIVER}}};SERVER={DATABASE_SERVER},{DATABASE_PORT};"
-        f"DATABASE={DATABASE_NAME};UID={DATABASE_USER};PWD={DATABASE_PASSWORD}"
-    )
-    if os.getenv("MSSQL_TRUST_SERVER_CERTIFICATE", "").lower() in ("true", "1", "yes"):
-        _conn_opts += ";TrustServerCertificate=yes"
-DATABASE_CONNECTION_STRING = os.getenv("MSSQL_CONNECTION_STRING", _conn_opts)
-DATABASE_PREFLIGHT = os.getenv(
-    "HAPAPP_DATABASE_PREFLIGHT",
+DATASTORE_BACKEND = os.getenv("HAPAPP_DATASTORE", "firestore").strip().lower()
+GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("GCLOUD_PROJECT", "")).strip()
+FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE", "(default)").strip()
+DATASTORE_PREFLIGHT = os.getenv(
+    "HAPAPP_DATASTORE_PREFLIGHT",
     "1" if APP_ENV in {"development", "production"} else "0",
 ).lower() in ("true", "1", "yes")
 GITHUB_PUBLISHING_RECOVERY_ENABLED = os.getenv(
@@ -87,7 +70,9 @@ def assert_cloud_run_configuration_ready() -> None:
         errors.append("ORCID_CLIENT_ID and ORCID_CLIENT_SECRET must be configured")
     if TLS_ENABLED:
         errors.append("TLS_ENABLED must be false because Cloud Run terminates TLS")
-    if DATABASE_NAME.casefold() in {"master", "model", "msdb", "tempdb"}:
-        errors.append("MSSQL_DATABASE must name the dedicated HapApp application database")
+    if DATASTORE_BACKEND != "firestore":
+        errors.append("HAPAPP_DATASTORE must be firestore")
+    if not FIRESTORE_DATABASE:
+        errors.append("FIRESTORE_DATABASE must identify the HapApp Firestore database")
     if errors:
         raise RuntimeError("Invalid Cloud Run configuration: " + "; ".join(errors))

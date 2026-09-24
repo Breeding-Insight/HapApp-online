@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import requests
 
 from hapapp_python import config
-from hapapp_python.database import DatabaseManager
+from hapapp_python.database import FirestoreRepository
 
 logger = logging.getLogger(__name__)
 
@@ -130,51 +130,23 @@ def fetch_public_orcid_profile(orcid_id: str) -> ORCIDProfile:
     return parse_orcid_record(orcid_id, response.json())
 
 
-def get_cached_profile(orcid_id: str, db: DatabaseManager | None = None) -> dict[str, Any] | None:
-    manager = db or DatabaseManager()
-    rows = manager.execute_query("SELECT * FROM hapapp.orcid_profiles WHERE orcid_id = ?", (orcid_id,))
-    return rows[0] if rows else None
+def get_cached_profile(orcid_id: str, db: FirestoreRepository | None = None) -> dict[str, Any] | None:
+    repository = db or FirestoreRepository()
+    return repository.get_profile(orcid_id)
 
 
-def upsert_profile(profile: ORCIDProfile, db: DatabaseManager | None = None) -> None:
-    manager = db or DatabaseManager()
-    manager.execute_update(
-        """
-        MERGE hapapp.orcid_profiles AS target
-        USING (SELECT ? AS orcid_id) AS source
-        ON target.orcid_id = source.orcid_id
-        WHEN MATCHED THEN
-            UPDATE SET
-                display_name = ?, public_email = ?, institution = ?, location = ?,
-                last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-        WHEN NOT MATCHED THEN
-            INSERT (
-                orcid_id, display_name, public_email, institution, location, last_fetched_at
-            )
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
-        """,
-        (
-            profile.orcid_id,
-            profile.display_name,
-            profile.public_email,
-            profile.institution,
-            profile.location,
-            profile.orcid_id,
-            profile.display_name,
-            profile.public_email,
-            profile.institution,
-            profile.location,
-        ),
-    )
+def upsert_profile(profile: ORCIDProfile, db: FirestoreRepository | None = None) -> None:
+    repository = db or FirestoreRepository()
+    repository.upsert_profile(asdict(profile))
 
 
-def refresh_profile(orcid_id: str, db: DatabaseManager | None = None) -> dict[str, Any] | None:
-    manager = db or DatabaseManager()
-    cached = get_cached_profile(orcid_id, manager)
+def refresh_profile(orcid_id: str, db: FirestoreRepository | None = None) -> dict[str, Any] | None:
+    repository = db or FirestoreRepository()
+    cached = get_cached_profile(orcid_id, repository)
     try:
         profile = fetch_public_orcid_profile(orcid_id)
-        upsert_profile(profile, manager)
-        return get_cached_profile(orcid_id, manager)
+        upsert_profile(profile, repository)
+        return get_cached_profile(orcid_id, repository)
     except Exception as exc:  # noqa: BLE001 - profile enrichment must not block login.
         logger.warning("Could not refresh ORCID profile for %s: %s", orcid_id, exc)
         return cached

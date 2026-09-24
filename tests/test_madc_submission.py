@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 from hapapp_python.madc_submission import (
     MADC_SUBMISSION_METADATA_FILENAME,
-    assert_submission_publication_schema_ready,
+    assert_submission_store_ready,
     build_madc_submission_metadata,
     claim_submission_for_publication,
     find_duplicate_madc_submission,
@@ -30,28 +30,24 @@ from hapapp_python.madc_submission import (
 class MADCSubmissionTests(unittest.TestCase):
     def test_finds_duplicate_by_filename_and_project_id(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [
-            {
-                "run_id": "prior-run",
-                "madc_filename": "DAl26-11931_MADC.csv",
-                "inferred_project_id": "DAl26-11931",
-                "submission_status": "submitted_for_review",
-            }
-        ]
+        db.find_duplicate_submission.return_value = {
+            "run_id": "prior-run",
+            "madc_filename": "DAl26-11931_MADC.csv",
+            "inferred_project_id": "DAl26-11931",
+            "submission_status": "submitted_for_review",
+        }
 
         duplicate = find_duplicate_madc_submission("DAl26-11931_MADC.csv", "DAl26-11931", db)
 
         self.assertEqual(duplicate["run_id"], "prior-run")
-        sql, parameters = db.execute_query.call_args.args
-        self.assertIn("madc_filename", sql)
-        self.assertIn("inferred_project_id", sql)
-        self.assertEqual(parameters, ("DAl26-11931_MADC.csv", "DAl26-11931"))
+        duplicate_key = db.find_duplicate_submission.call_args.args[0]
+        self.assertEqual(len(duplicate_key), 64)
 
     def test_duplicate_check_requires_both_tracking_values(self) -> None:
         db = Mock()
 
         self.assertIsNone(find_duplicate_madc_submission("DAl26-11931_MADC.csv", "", db))
-        db.execute_query.assert_not_called()
+        db.find_duplicate_submission.assert_not_called()
 
     def test_infers_dai_project_id_from_filename(self) -> None:
         self.assertEqual(infer_genotyping_project_id("alfalfa_DAI123456_report.csv"), "DAI-123456")
@@ -110,19 +106,17 @@ class MADCSubmissionTests(unittest.TestCase):
 
     def test_persists_submission_decision_by_run_id(self) -> None:
         db = Mock()
-        db.execute_update.return_value = 1
+        db.update_submission.return_value = 1
         updated_rows = persist_submission_decision("run", "0000-0001-2345-6789", "submitted_for_review", db)
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("UPDATE hapapp.madc_submissions", sql)
-        self.assertIn(
-            "WHERE run_id = ? AND submitter_orcid_id = ? AND submission_status = 'awaiting_decision'",
-            sql,
-        )
-        self.assertEqual(parameters, ("submitted_for_review", "run", "0000-0001-2345-6789"))
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[0], "run")
+        self.assertEqual(args[1]["submission_status"], "submitted_for_review")
+        self.assertEqual(kwargs["submitter_orcid_id"], "0000-0001-2345-6789")
+        self.assertEqual(kwargs["expected_submission_status"], "awaiting_decision")
         self.assertEqual(updated_rows, 1)
 
-    def test_persists_submission_metadata_in_hapapp_schema(self) -> None:
+    def test_persists_submission_metadata_in_firestore(self) -> None:
         metadata = build_madc_submission_metadata(
             run_id="run",
             current_user={"orcid_id": "0000-0001-2345-6789"},
@@ -141,11 +135,11 @@ class MADCSubmissionTests(unittest.TestCase):
 
         persist_submission_metadata(metadata, db)
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("sp_getapplock", sql)
-        self.assertIn("MADC filename and formal project ID were already processed", sql)
-        self.assertIn("MERGE hapapp.madc_submissions AS target", sql)
-        self.assertEqual(parameters[0:2], ("madc.csv", ""))
+        args, kwargs = db.upsert_submission.call_args
+        self.assertEqual(args[0], "run")
+        self.assertEqual(args[1]["madc_filename"], "madc.csv")
+        self.assertEqual(args[1]["metadata_created_at"], metadata.created_at)
+        self.assertIsNone(kwargs["duplicate_key_id"])
 
     def test_rejects_invalid_submission_decision(self) -> None:
         with self.assertRaisesRegex(ValueError, "Invalid MADC submission decision"):
@@ -157,15 +151,15 @@ class MADCSubmissionTests(unittest.TestCase):
 
     def test_atomically_claims_an_awaiting_non_stale_submission_for_publication(self) -> None:
         db = Mock()
-        db.execute_update.return_value = 1
+        db.update_submission.return_value = 1
 
         updated_rows = claim_submission_for_publication("run", "owner", db)
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("submission_status = 'publishing'", sql)
-        self.assertIn("submission_status = 'awaiting_decision'", sql)
-        self.assertIn("freshness_status <> 'stale'", sql)
-        self.assertEqual(parameters, ("run", "owner"))
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[1]["submission_status"], "publishing")
+        self.assertEqual(kwargs["submitter_orcid_id"], "owner")
+        self.assertEqual(kwargs["expected_submission_status"], "awaiting_decision")
+        self.assertTrue(kwargs["require_not_stale"])
         self.assertEqual(updated_rows, 1)
 
     def test_releases_a_failed_publication_claim_for_retry(self) -> None:
@@ -173,10 +167,11 @@ class MADCSubmissionTests(unittest.TestCase):
 
         release_submission_publication_claim("run", "owner", "GitHub unavailable", db)
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("submission_status = 'awaiting_decision'", sql)
-        self.assertIn("submission_status = 'publishing'", sql)
-        self.assertEqual(parameters, ("GitHub unavailable", None, "run", "owner"))
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[1]["submission_status"], "awaiting_decision")
+        self.assertEqual(args[1]["review_feedback"], "GitHub unavailable")
+        self.assertNotIn("freshness_status", args[1])
+        self.assertEqual(kwargs["expected_submission_status"], "publishing")
 
     def test_releases_a_stale_publication_claim_as_non_retryable(self) -> None:
         db = Mock()
@@ -189,110 +184,65 @@ class MADCSubmissionTests(unittest.TestCase):
             freshness_status="stale",
         )
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("freshness_status = COALESCE(CAST(? AS NVARCHAR(32)), freshness_status)", sql)
-        self.assertEqual(
-            parameters,
-            ("Rerun against the latest database", "stale", "run", "owner"),
-        )
+        updates = db.update_submission.call_args.args[1]
+        self.assertEqual(updates["freshness_status"], "stale")
+        self.assertEqual(updates["review_feedback"], "Rerun against the latest database")
 
     def test_lists_only_expired_publishing_claims(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [
+        db.list_submissions_by_status.return_value = [
             {
                 "run_id": "run",
                 "submitter_orcid_id": "owner",
                 "input_github_repository": "https://github.com/example/species",
                 "input_github_ref": "main",
                 "input_github_commit_sha": "base",
+                "updated_at": "2000-01-01T00:00:00Z",
             }
         ]
 
         claims = list_stranded_publishing_submissions(3600, db)
 
         self.assertEqual(claims[0].run_id, "run")
-        sql, parameters = db.execute_query.call_args.args
-        self.assertIn("submission_status = 'publishing'", sql)
-        self.assertIn("DATEADD", sql)
-        self.assertEqual(parameters, (3600,))
+        db.list_submissions_by_status.assert_called_once_with("publishing", limit=100)
 
     def test_marks_only_a_still_publishing_claim_stale(self) -> None:
         db = Mock()
-        db.execute_update.return_value = 1
+        db.update_submission.return_value = 1
 
         updated = mark_stranded_publication_stale("run", "owner", "branch advanced", db)
 
         self.assertEqual(updated, 1)
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("submission_status = 'changes_requested'", sql)
-        self.assertIn("freshness_status = 'stale'", sql)
-        self.assertIn("submission_status = 'publishing'", sql)
-        self.assertEqual(parameters, ("branch advanced", "run", "owner"))
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[1]["submission_status"], "changes_requested")
+        self.assertEqual(args[1]["freshness_status"], "stale")
+        self.assertEqual(kwargs["expected_submission_status"], "publishing")
 
-    def test_publication_schema_preflight_accepts_publishing_constraint(self) -> None:
-        db = Mock()
-        db.execute_query.return_value = [
-            {
-                "database_name": "HapApp",
-                "users_object_id": 1,
-                "profiles_object_id": 2,
-                "submissions_object_id": 3,
-                "status_constraint_definition": "([submission_status]='publishing')",
-            }
-        ]
+    def test_firestore_preflight_accepts_an_accessible_database(self) -> None:
+        db = Mock(unsafe=True)
+        assert_submission_store_ready(db)
+        db.assert_ready.assert_called_once_with()
 
-        assert_submission_publication_schema_ready(db)
+    def test_firestore_preflight_explains_access_failures(self) -> None:
+        db = Mock(unsafe=True)
+        db.assert_ready.side_effect = RuntimeError("permission denied")
 
-        sql = db.execute_query.call_args.args[0]
-        self.assertIn("DB_NAME()", sql)
-        self.assertIn("OBJECT_ID('dbo.users', 'U')", sql)
-        self.assertIn("CK_hapapp_madc_submissions_status", sql)
-        self.assertIn("OBJECT_ID('hapapp.madc_submissions')", sql)
-
-    def test_publication_schema_preflight_rejects_old_constraint(self) -> None:
-        db = Mock()
-        db.execute_query.return_value = [
-            {
-                "database_name": "HapApp",
-                "users_object_id": 1,
-                "profiles_object_id": 2,
-                "submissions_object_id": 3,
-                "status_constraint_definition": "([submission_status]='awaiting_decision')",
-            }
-        ]
-
-        with self.assertRaisesRegex(RuntimeError, "Run `schema_hapapp.sql`"):
-            assert_submission_publication_schema_ready(db)
-
-    def test_publication_schema_preflight_rejects_system_database(self) -> None:
-        db = Mock()
-        db.execute_query.return_value = [
-            {
-                "database_name": "master",
-                "users_object_id": 1,
-                "profiles_object_id": 2,
-                "submissions_object_id": 3,
-                "status_constraint_definition": "([submission_status]='publishing')",
-            }
-        ]
-
-        with self.assertRaisesRegex(RuntimeError, "complete HapApp schema"):
-            assert_submission_publication_schema_ready(db)
+        with self.assertRaisesRegex(RuntimeError, "roles/datastore.user"):
+            assert_submission_store_ready(db)
 
     def test_reads_submission_review_state(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [
-            {
-                "run_id": "run",
-                "submission_status": "changes_requested",
-                "freshness_status": "stale",
-                "review_feedback": "Rerun against the latest database.",
-                "pull_request_url": "https://github.com/example/repo/pull/1",
-                "incorporation_commit_url": None,
-                "archive_status": "archived",
-                "archive_error": None,
-            }
-        ]
+        db.get_submission.return_value = {
+            "run_id": "run",
+            "submitter_orcid_id": "0000-0001-2345-6789",
+            "submission_status": "changes_requested",
+            "freshness_status": "stale",
+            "review_feedback": "Rerun against the latest database.",
+            "pull_request_url": "https://github.com/example/repo/pull/1",
+            "incorporation_commit_url": None,
+            "archive_status": "archived",
+            "archive_error": None,
+        }
 
         state = get_submission_state("run", "0000-0001-2345-6789", db)
 
@@ -314,18 +264,18 @@ class MADCSubmissionTests(unittest.TestCase):
             db=db,
         )
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("output_checksums_json", sql)
-        self.assertEqual(parameters[:3], ("v010", "v011", '{"result.fa": "abc"}'))
+        updates = db.update_submission.call_args.args[1]
+        self.assertEqual(updates["output_checksums_json"], '{"result.fa": "abc"}')
 
     def test_persists_archive_status(self) -> None:
         db = Mock()
 
         persist_submission_archive_status("run", "0000-0001-2345-6789", "failed", "upload failed", db)
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("archive_status", sql)
-        self.assertEqual(parameters, ("failed", "upload failed", "run", "0000-0001-2345-6789"))
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[1]["archive_status"], "failed")
+        self.assertEqual(args[1]["archive_error"], "upload failed")
+        self.assertEqual(kwargs["submitter_orcid_id"], "0000-0001-2345-6789")
 
     def test_persists_review_feedback_and_freshness(self) -> None:
         db = Mock()
@@ -340,15 +290,14 @@ class MADCSubmissionTests(unittest.TestCase):
             db=db,
         )
 
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("freshness_status", sql)
-        self.assertIn("review_feedback", sql)
-        self.assertIn("CAST(? AS NVARCHAR(MAX))", sql)
-        self.assertEqual(parameters[0:3], ("changes_requested", "stale", "Rerun against the latest database."))
+        updates = db.update_submission.call_args.args[1]
+        self.assertEqual(updates["submission_status"], "changes_requested")
+        self.assertEqual(updates["freshness_status"], "stale")
+        self.assertEqual(updates["review_feedback"], "Rerun against the latest database.")
 
     def test_finalizes_github_incorporation_without_nullable_parameters(self) -> None:
         db = Mock()
-        db.execute_update.return_value = 1
+        db.update_submission.return_value = 1
 
         updated_rows = persist_github_incorporation(
             "run",
@@ -357,19 +306,12 @@ class MADCSubmissionTests(unittest.TestCase):
             db,
         )
 
-        sql, parameters = db.execute_update.call_args.args
         self.assertEqual(updated_rows, 1)
-        self.assertIn("submission_status = 'incorporated'", sql)
-        self.assertIn("submission_status = 'publishing'", sql)
-        self.assertNotIn(None, parameters)
-        self.assertEqual(
-            parameters,
-            (
-                "https://github.com/example/repo/commit/abc",
-                "run",
-                "0000-0001-2345-6789",
-            ),
-        )
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[1]["submission_status"], "incorporated")
+        self.assertEqual(args[1]["incorporation_commit_url"], "https://github.com/example/repo/commit/abc")
+        self.assertEqual(kwargs["submitter_orcid_id"], "0000-0001-2345-6789")
+        self.assertEqual(kwargs["expected_submission_status"], "publishing")
 
 
 if __name__ == "__main__":

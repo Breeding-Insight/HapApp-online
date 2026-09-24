@@ -31,6 +31,7 @@ def publishing_row(**overrides):
         "input_github_repository": "https://github.com/example/species",
         "input_github_ref": "main",
         "input_github_commit_sha": "base",
+        "updated_at": "2000-01-01T00:00:00Z",
     }
     row.update(overrides)
     return row
@@ -39,8 +40,8 @@ def publishing_row(**overrides):
 class GitHubRecoveryTests(unittest.TestCase):
     def test_finalizes_a_commit_that_github_already_accepted(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [publishing_row()]
-        db.execute_update.return_value = 1
+        db.list_submissions_by_status.return_value = [publishing_row()]
+        db.update_submission.return_value = 1
         client = RecoveryGitHubClient(
             head="published",
             commits=[GitHubBranchCommit("published", "Contribution\n\nHapApp-Run-ID: run")],
@@ -50,14 +51,14 @@ class GitHubRecoveryTests(unittest.TestCase):
 
         self.assertEqual(report.incorporated, 1)
         self.assertEqual(report.released, 0)
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("submission_status = 'incorporated'", sql)
-        self.assertEqual(parameters[0], "https://github.com/example/species/commit/published")
+        updates = db.update_submission.call_args.args[1]
+        self.assertEqual(updates["submission_status"], "incorporated")
+        self.assertEqual(updates["incorporation_commit_url"], "https://github.com/example/species/commit/published")
 
     def test_releases_a_claim_when_the_branch_never_changed(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [publishing_row()]
-        db.execute_update.return_value = 1
+        db.list_submissions_by_status.return_value = [publishing_row()]
+        db.update_submission.return_value = 1
 
         report = recover_stranded_github_publications(
             3600,
@@ -66,39 +67,39 @@ class GitHubRecoveryTests(unittest.TestCase):
         )
 
         self.assertEqual(report.released, 1)
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("submission_status = 'awaiting_decision'", sql)
-        self.assertEqual(parameters[-2:], ("run", "owner"))
+        args, kwargs = db.update_submission.call_args
+        self.assertEqual(args[1]["submission_status"], "awaiting_decision")
+        self.assertEqual(kwargs["submitter_orcid_id"], "owner")
 
     def test_marks_a_claim_stale_when_another_commit_advanced_the_branch(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [publishing_row()]
-        db.execute_update.return_value = 1
+        db.list_submissions_by_status.return_value = [publishing_row()]
+        db.update_submission.return_value = 1
         client = RecoveryGitHubClient(head="new-head")
 
         report = recover_stranded_github_publications(3600, db=db, client=client)
 
         self.assertEqual(report.stale, 1)
         self.assertEqual(client.history_reads, 2)
-        sql, parameters = db.execute_update.call_args.args
-        self.assertIn("submission_status = 'changes_requested'", sql)
-        self.assertIn("expected base, found new-head", parameters[0])
+        updates = db.update_submission.call_args.args[1]
+        self.assertEqual(updates["submission_status"], "changes_requested")
+        self.assertIn("expected base, found new-head", updates["review_feedback"])
 
     def test_defers_recovery_when_github_is_unavailable(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [publishing_row()]
+        db.list_submissions_by_status.return_value = [publishing_row()]
         client = RecoveryGitHubClient()
         client.error = GitHubPublicationError("unavailable")
 
         report = recover_stranded_github_publications(3600, db=db, client=client)
 
         self.assertEqual(report.deferred, 1)
-        db.execute_update.assert_not_called()
+        db.update_submission.assert_not_called()
 
     def test_releases_an_incomplete_claim_without_contacting_github(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [publishing_row(input_github_commit_sha=None)]
-        db.execute_update.return_value = 1
+        db.list_submissions_by_status.return_value = [publishing_row(input_github_commit_sha=None)]
+        db.update_submission.return_value = 1
         client = RecoveryGitHubClient()
 
         report = recover_stranded_github_publications(3600, db=db, client=client)
@@ -108,8 +109,8 @@ class GitHubRecoveryTests(unittest.TestCase):
 
     def test_concurrent_recovery_that_already_changed_the_claim_is_harmless(self) -> None:
         db = Mock()
-        db.execute_query.return_value = [publishing_row()]
-        db.execute_update.return_value = 0
+        db.list_submissions_by_status.return_value = [publishing_row()]
+        db.update_submission.return_value = 0
 
         report = recover_stranded_github_publications(
             3600,

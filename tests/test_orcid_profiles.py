@@ -158,24 +158,28 @@ class ORCIDProfileTests(unittest.TestCase):
         ):
             self.assertIsNone(refresh_profile("0000-0001-2345-6789", db=object()))
 
-    def test_reads_cached_profile_from_hapapp_schema(self) -> None:
+    def test_reads_cached_profile_from_firestore(self) -> None:
         db = Mock()
-        db.execute_query.return_value = []
+        db.get_profile.return_value = None
 
         get_cached_profile("0000-0001-2345-6789", db)
 
-        self.assertEqual(
-            db.execute_query.call_args.args,
-            ("SELECT * FROM hapapp.orcid_profiles WHERE orcid_id = ?", ("0000-0001-2345-6789",)),
-        )
+        db.get_profile.assert_called_once_with("0000-0001-2345-6789")
 
-    def test_upserts_profile_in_hapapp_schema(self) -> None:
+    def test_upserts_profile_in_firestore(self) -> None:
         db = Mock()
 
         upsert_profile(ORCIDProfile(orcid_id="0000-0001-2345-6789"), db)
 
-        sql = db.execute_update.call_args.args[0]
-        self.assertIn("MERGE hapapp.orcid_profiles AS target", sql)
+        db.upsert_profile.assert_called_once_with(
+            {
+                "orcid_id": "0000-0001-2345-6789",
+                "display_name": None,
+                "public_email": None,
+                "institution": None,
+                "location": None,
+            }
+        )
 
 
 if __name__ == "__main__":

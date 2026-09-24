@@ -68,11 +68,11 @@ cp config/production.env.example config/production.env
 docker compose -f docker-compose.yml -f docker-compose.production.yml up --build -d
 ```
 
-Before starting a deployment for the first time, connect to its dedicated SQL Server application database and run `schema_hapapp.sql` followed by `permissions_hapapp.sql` with a database-owner account. The schema script creates the authorization table and all HapApp tables with the final GitHub publication states. The permissions script uses `hapapp_runtime_user` by default and recognizes a `dbo`/`db_owner` connection. Set its optional override only when the deployment's `MSSQL_USER` has a different name. Production startup verifies the configured database schema and fails clearly if the full schema has not been installed.
+HapApp stores authorized ORCID users, cached profiles, submission state, duplicate keys, and GitHub publication claims in Cloud Firestore. Server deployments use their attached Google Cloud service account; local development can use the Firestore emulator. Seed an active `users/{orcid_id}` document before signing in.
 
 ## Google Cloud Run
 
-The container accepts Cloud Run's injected `PORT`, reads configuration directly from the process and Secret Manager without requiring a mounted `.env` file, and trusts Cloud Run's immediate proxy headers. A dedicated Cloud SQL for SQL Server database can be used instead of `HaploSearch`. See [docs/cloud-run.md](docs/cloud-run.md) for database bootstrap, ORCID callback, secrets, VPC networking, repository deployment, and the current single-instance processing constraint.
+The container accepts Cloud Run's injected `PORT`, reads configuration directly from the process and Secret Manager without requiring a mounted `.env` file, trusts Cloud Run's immediate proxy headers, and uses Application Default Credentials to reach Firestore. See [docs/cloud-run.md](docs/cloud-run.md) for Firestore bootstrap, ORCID callback, secrets, service identity, repository deployment, and the current single-instance processing constraint.
 
 ## Workflow
 

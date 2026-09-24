@@ -1,7 +1,7 @@
 substitutions:
-  _REGION: us-central1
+  _REGION: us-west1
   _REPOSITORY: hapapp
-  _SERVICE: hapapp
+  _SERVICE: hapapp-online
 
 steps:
   - name: gcr.io/cloud-builders/docker

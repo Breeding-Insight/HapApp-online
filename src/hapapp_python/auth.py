@@ -8,7 +8,7 @@ import requests
 from flask import Blueprint, redirect, request, session
 
 from hapapp_python import config
-from hapapp_python.database import DatabaseManager
+from hapapp_python.database import FirestoreRepository
 from hapapp_python.orcid_profiles import refresh_profile
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -46,11 +46,10 @@ def require_login(func):
     return wrapped
 
 
-def lookup_user(orcid_id: str, db: DatabaseManager | None = None) -> dict | None:
+def lookup_user(orcid_id: str, db: FirestoreRepository | None = None) -> dict | None:
     try:
-        manager = db or DatabaseManager()
-        rows = manager.execute_query("SELECT * FROM dbo.users WHERE orcid_id = ? AND is_active = 1", (orcid_id,))
-        return rows[0] if rows else None
+        repository = db or FirestoreRepository()
+        return repository.get_active_user(orcid_id)
     except Exception:
         return None
 

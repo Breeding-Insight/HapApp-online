@@ -68,7 +68,7 @@ from hapapp_python.madc_submission import (
     persist_submission_result_provenance,
     persist_submission_review_state,
     release_submission_publication_claim,
-    assert_submission_publication_schema_ready,
+    assert_submission_store_ready,
     write_submission_metadata,
 )
 from hapapp_python.madc_workflow import build_madc_command, missing_madc_commands
@@ -2753,8 +2753,8 @@ def prepare_runtime() -> None:
 
         config.assert_cloud_run_configuration_ready()
         RUN_BASE.mkdir(parents=True, exist_ok=True)
-        if config.DATABASE_PREFLIGHT:
-            assert_submission_publication_schema_ready()
+        if config.DATASTORE_PREFLIGHT:
+            assert_submission_store_ready()
         if config.GITHUB_PUBLISHING_RECOVERY_ENABLED:
             try:
                 recovery = recover_stranded_github_publications(
