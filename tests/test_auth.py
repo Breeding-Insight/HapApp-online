@@ -137,6 +137,26 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(asset_response.status_code, 404)
         self.assertEqual(post_response.status_code, 302)
 
+    def test_landing_page_renders_sign_in_and_partner_logos_for_anonymous_user(self) -> None:
+        response = create_server().test_client().get("/")
+        body = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/auth/login"', body)
+        self.assertIn("Sign in with ORCID iD", body)
+        self.assertIn("funded by the U.S. Department of Agriculture (USDA) Agricultural Research Service (ARS)", body)
+        for logo in (
+            "breeding-insight-logo-white.png",
+            "usda-ars-logo-white.png",
+            "uf-ifas-logo.svg",
+            "cornell-logo-white.png",
+            "hapapp-logo.png",
+            "hapapp-icon.png",
+            "tools/bigapp.png",
+            "tools/bigr.png",
+        ):
+            self.assertIn(f"/app/assets/landing/{logo}", body)
+
     def test_local_auth_bypass_provides_stable_identity(self) -> None:
         server = create_server()
         server.route("/current-user")(lambda: get_current_user())

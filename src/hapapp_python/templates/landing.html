@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="HapApp processes DArTag MADC genotyping reports and shares new microhaplotypes with Breeding Insight's standardized microhaplotype databases.">
+    <title>HapApp | Breeding Insight</title>
+    <link rel="icon" type="image/png" href="{{ asset_base }}/hapapp-icon.png">
+    <style>
+      :root {
+        --ink: #1b2733;
+        --ink-muted: #4a5663;
+        --surface: #ffffff;
+        --surface-alt: #f4f8f8;
+        --surface-tint: #e6f2f2;
+        --border: #d3e0e1;
+        --primary: #066a73;
+        --primary-strong: #054f56;
+        --accent-green: #2aa84a;
+        --accent-cyan: #1fb1d6;
+        --footer-bg: #0c3237;
+        --footer-ink: #ffffff;
+        --footer-muted: #c9dcdd;
+        --focus: #1b64dd;
+        --radius: 10px;
+        --shadow: 0 1px 2px rgba(12, 50, 55, 0.06), 0 6px 20px rgba(12, 50, 55, 0.06);
+        --max: 1120px;
+        --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--surface);
+        color: var(--ink);
+        font-family: var(--font);
+        font-size: 1rem;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      img { max-width: 100%; height: auto; }
+      h1, h2, h3 { line-height: 1.2; margin: 0; }
+      p { margin: 0; }
+      a { color: var(--primary); text-underline-offset: 3px; }
+      a:hover { color: var(--primary-strong); }
+      :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+
+      .skip-link {
+        position: absolute; left: 16px; top: -100px; z-index: 10;
+        background: var(--surface); color: var(--primary-strong); padding: 10px 16px;
+        border: 2px solid var(--primary); border-radius: 6px; font-weight: 700;
+      }
+      .skip-link:focus { top: 12px; }
+      .visually-hidden {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+      .wrap { width: min(var(--max), 100% - 32px); margin-inline: auto; }
+
+      /* Header */
+      .site-header { border-bottom: 1px solid var(--border); background: var(--surface); }
+      .site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; flex-wrap: wrap; }
+      .brand { display: flex; align-items: center; gap: 14px; }
+      .brand .bi-logo { display: block; width: 150px; }
+      .app-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+      .app-brand img { display: block; height: 48px; width: auto; }
+      .brand-divider { width: 1px; height: 32px; background: var(--border); }
+      .site-nav ul { display: flex; gap: 4px 20px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
+      .site-nav a { color: var(--ink-muted); font-weight: 600; text-decoration: none; padding: 6px 2px; display: inline-block; }
+      .site-nav a:hover { color: var(--primary-strong); text-decoration: underline; }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex; align-items: center; gap: 10px; min-height: 48px;
+        padding: 12px 22px; border-radius: 999px; font-weight: 700; font-size: 1rem;
+        text-decoration: none; border: 2px solid transparent; transition: background-color .15s ease, color .15s ease;
+      }
+      .btn-primary { background: var(--primary); color: #ffffff; }
+      .btn-primary:hover { background: var(--primary-strong); color: #ffffff; }
+      .btn-secondary { background: var(--surface); color: var(--primary-strong); border-color: var(--primary); }
+      .btn-secondary:hover { background: var(--surface-tint); color: var(--primary-strong); }
+      .orcid-icon { width: 24px; height: 24px; flex: none; background: #ffffff; border-radius: 50%; }
+
+      /* Hero */
+      .hero {
+        background:
+          radial-gradient(900px 400px at 100% 0%, rgba(31, 177, 214, 0.10), transparent 60%),
+          radial-gradient(700px 360px at 0% 100%, rgba(42, 168, 74, 0.08), transparent 60%),
+          var(--surface-alt);
+        border-bottom: 1px solid var(--border);
+      }
+      .hero .wrap { display: grid; grid-template-columns: 1fr auto; gap: 48px; align-items: center; padding-block: 72px; }
+      .hero-logo { width: 240px; height: auto; }
+      .eyebrow {
+        display: inline-block; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--primary-strong); margin-bottom: 14px;
+      }
+      .hero h1 { font-size: clamp(2rem, 1.3rem + 2.6vw, 3rem); letter-spacing: -0.02em; margin-bottom: 18px; }
+      .hero .lead { font-size: 1.125rem; color: var(--ink-muted); max-width: 60ch; margin-bottom: 28px; }
+      .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+      .access-note { font-size: 0.9375rem; color: var(--ink-muted); max-width: 60ch; }
+
+
+      /* Sections */
+      section.band { padding-block: 72px; }
+      section.band.alt { background: var(--surface-alt); border-block: 1px solid var(--border); }
+      .section-head { max-width: 72ch; margin-bottom: 36px; }
+      .section-head h2 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); letter-spacing: -0.015em; margin-bottom: 12px; }
+      .section-head p { color: var(--ink-muted); font-size: 1.0625rem; }
+
+      .grid { display: grid; gap: 20px; }
+      .grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+      .card {
+        background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 22px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;
+      }
+      .card h3 { font-size: 1.0625rem; }
+      .card p { color: var(--ink-muted); font-size: 0.9625rem; }
+
+      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+      .prose p + p { margin-top: 14px; }
+      .prose p { color: var(--ink-muted); }
+      .prose strong { color: var(--ink); }
+
+      .citation {
+        border-left: 4px solid var(--primary); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0;
+        padding: 22px 24px; box-shadow: var(--shadow);
+      }
+      .citation .label { font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-strong); margin-bottom: 8px; }
+      .citation .title { font-size: 1.125rem; font-weight: 700; margin-bottom: 8px; }
+      .citation .meta { color: var(--ink-muted); font-size: 0.9375rem; margin-bottom: 16px; }
+      .citation .links { display: flex; gap: 12px 20px; flex-wrap: wrap; font-weight: 600; }
+      .crops { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 20px 0 0; }
+      .crops li {
+        background: var(--surface-tint); color: var(--primary-strong); border: 1px solid var(--border);
+        border-radius: 999px; padding: 4px 12px; font-size: 0.875rem; font-weight: 600;
+      }
+
+      .tool-card { gap: 12px; }
+      .tool-head { display: flex; align-items: center; gap: 14px; }
+      .tool-logo { width: 64px; height: 64px; object-fit: contain; flex: none; }
+      .tool-logo.wide { width: 120px; }
+      .tool-logo-fallback {
+        width: 64px; height: 64px; flex: none; display: grid; place-items: center;
+        clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+        background: var(--primary); color: #ffffff; font-weight: 800; font-size: 1rem;
+      }
+      .tool-card .tool-tag { font-size: 0.8125rem; font-weight: 700; color: var(--primary-strong); letter-spacing: 0.04em; text-transform: uppercase; }
+      .tool-card p { flex: 1; }
+      .tool-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+      .tool-links a {
+        display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px;
+        border-radius: 8px; border: 1px solid var(--border); font-size: 0.9rem; font-weight: 600;
+        text-decoration: none; color: var(--primary-strong); background: var(--surface);
+      }
+      .tool-links a:hover { background: var(--surface-tint); border-color: var(--primary); }
+      .tool-links svg { width: 16px; height: 16px; flex: none; }
+      .more-links { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+      .cta { text-align: center; }
+      .cta .section-head { margin-inline: auto; }
+      .cta .hero-actions { justify-content: center; margin-bottom: 0; }
+
+
+      /* Footer */
+      .site-footer { background: var(--footer-bg); color: var(--footer-ink); padding-block: 48px 32px; }
+      .partner-logos { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 28px 48px; list-style: none; margin: 0 0 32px; padding: 0; }
+      .partner-logos img { display: block; height: 44px; width: auto; }
+      .partner-logos .logo-bi img { height: 56px; }
+      .partner-logos .logo-ifas img { filter: brightness(0) invert(1); }
+      .funding { text-align: center; max-width: 70ch; margin: 0 auto 24px; color: var(--footer-ink); font-size: 1rem; }
+      .footer-bottom {
+        border-top: 1px solid rgba(201, 220, 221, 0.35); padding-top: 20px;
+        display: flex; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; color: var(--footer-muted); font-size: 0.9rem;
+      }
+      .footer-bottom ul { display: flex; gap: 8px 20px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+      .site-footer a { color: var(--footer-ink); }
+      .site-footer a:hover { color: var(--footer-muted); }
+      .site-footer :focus-visible { outline-color: #ffffff; }
+
+      @media (max-width: 960px) {
+        .split { grid-template-columns: 1fr; }
+        .hero-logo { width: 160px; }
+        .grid-3 { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (max-width: 640px) {
+        .hero .wrap { padding-block: 48px; }
+        .hero-logo { display: none; }
+        section.band { padding-block: 52px; }
+        .grid-3 { grid-template-columns: 1fr; }
+        .brand .bi-logo { width: 120px; }
+        .brand-divider, .site-nav { display: none; }
+        .partner-logos img { height: 36px; }
+        .partner-logos .logo-bi img { height: 46px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        * { transition: none !important; }
+      }
+      @media (forced-colors: active) {
+        .btn, .card, .tool-links a { border: 1px solid CanvasText; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <svg aria-hidden="true" focusable="false" style="display:none">
+      <symbol id="icon-orcid" viewBox="0 0 256 256">
+        <path fill="#A6CE39" d="M256 128c0 70.7-57.3 128-128 128S0 198.7 0 128 57.3 0 128 0s128 57.3 128 128z"/>
+        <path fill="#fff" d="M86.3 186.2H70.9V79.1h15.4v107.1zM108.9 79.1h41.6c39.6 0 57 28.3 57 53.6 0 27.5-21.5 53.6-56.8 53.6h-41.8V79.1zm15.4 93.3h24.5c34.9 0 42.9-26.5 42.9-39.7C191.7 111.2 178 93 148 93h-23.7v79.4zM88.7 56.8c0 5.5-4.5 10.1-10.1 10.1s-10.1-4.6-10.1-10.1c0-5.6 4.5-10.1 10.1-10.1s10.1 4.6 10.1 10.1z"/>
+      </symbol>
+      <symbol id="icon-globe" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+      <symbol id="icon-github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+    </svg>
+
+    <header class="site-header">
+      <div class="wrap">
+        <div class="brand">
+          <a href="https://breedinginsight.org/">
+            <img class="bi-logo" src="{{ asset_base }}/breeding-insight-logo.png" width="280" height="102" alt="Breeding Insight">
+          </a>
+          <span class="brand-divider" aria-hidden="true"></span>
+          <a class="app-brand" href="/">
+            <img src="{{ asset_base }}/hapapp-logo.png" width="127" height="48" alt="HapApp">
+          </a>
+        </div>
+        <nav class="site-nav" aria-label="Page sections">
+          <ul>
+            <li><a href="#why">Why share</a></li>
+            <li><a href="#how">How it works</a></li>
+            <li><a href="#database">The database</a></li>
+            <li><a href="#tools">Downstream tools</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap">
+          <div>
+            <span class="eyebrow">Breeding Insight microhaplotype databases</span>
+            <h1 id="hero-title">Turn DArTag genotyping reports into shared, standardized microhaplotype data</h1>
+            <p class="lead">
+              HapApp processes raw DArTag Missing Allele Discovery Count (MADC) reports, assigns every
+              allele a fixed microhaplotype ID, and shares newly discovered microhaplotypes with the
+              public Breeding Insight microhaplotype database for your species.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="{{ login_url }}">
+                <svg class="orcid-icon" aria-hidden="true" focusable="false"><use href="#icon-orcid"/></svg>
+                Sign in with ORCID iD
+              </a>
+              <a class="btn btn-secondary" href="#why">Learn why it matters</a>
+            </div>
+            <p class="access-note">
+              Access is limited to registered users. To request access, please email
+              <a href="mailto:bi-science-team@ufl.edu?subject=HapApp%20access%20request">bi-science-team@ufl.edu</a>.
+            </p>
+          </div>
+          <img class="hero-logo" src="{{ asset_base }}/hapapp-icon.png" width="240" height="240" alt="">
+        </div>
+      </section>
+
+      <section class="band" id="why" aria-labelledby="why-title">
+        <div class="wrap">
+          <div class="section-head" style="margin-bottom:0">
+            <h2 id="why-title">Why a shared microhaplotype database?</h2>
+            <p>
+              DArTag reports label alleles differently from one genotyping project to the next, so the same
+              microhaplotype can carry different names in different datasets. Without a common reference,
+              results from separate breeding programs cannot be reliably combined or compared. Every report
+              shared through HapApp strengthens a single, consistent reference for the whole community.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band alt" id="how" aria-labelledby="how-title">
+        <div class="wrap split">
+          <div class="section-head" style="margin-bottom:0">
+            <h2 id="how-title">How HapApp works</h2>
+            <p>
+              HapApp is a web interface to the same Breeding Insight pipeline used to build the published
+              databases. You do not need to install bioinformatics software or use the command line.
+            </p>
+          </div>
+          <div class="prose">
+            <p>
+              <strong>Automatic panel detection.</strong> After you upload a raw MADC report, HapApp matches
+              its marker CloneIDs against the supported species panels and loads the current version of that
+              species' microhaplotype database.
+            </p>
+            <p>
+              <strong>Quality control and allele assignment.</strong> The report is checked and filtered, and each
+              allele is compared with the database. Known microhaplotypes receive their established IDs, and
+              novel ones are assigned new, unique IDs.
+            </p>
+            <p>
+              <strong>Review, then share.</strong> You download a processed MADC with fixed allele IDs for your
+              own analyses. When you confirm the submission, the new microhaplotypes and your submission
+              metadata are committed as a new version of the species database and recorded for Breeding
+              Insight review.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band" id="database" aria-labelledby="database-title">
+        <div class="wrap split">
+          <div>
+            <div class="section-head" style="margin-bottom:0">
+              <h2 id="database-title">The database you are sharing with</h2>
+              <p>
+                Breeding Insight maintains standardized, species-specific microhaplotype databases built from
+                DArTag data shared by USDA-ARS and university breeding programs. The framework and the
+                initial databases are described in a peer-reviewed publication.
+              </p>
+            </div>
+            <ul class="crops" aria-label="Species covered in the publication">
+              <li>Alfalfa</li><li>Blueberry</li><li>Cranberry</li><li>Cucumber</li>
+              <li>Pecan</li><li>Potato</li><li>Strawberry</li><li>Sweetpotato</li>
+            </ul>
+          </div>
+          <article class="citation" aria-labelledby="citation-title">
+            <p class="label">Publication</p>
+            <p class="title" id="citation-title">Standardized microhaplotype databases and frameworks for assessing and mining crop genetic diversity</p>
+            <p class="meta">Zhao D., Lin M., Taniguti C.H., et al. <cite>Theoretical and Applied Genetics</cite> 139, 244 (2026).</p>
+            <div class="links">
+              <a href="https://doi.org/10.1007/s00122-026-05340-4">Read the article<span class="visually-hidden"> (DOI 10.1007/s00122-026-05340-4)</span></a>
+              <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC13506570/">Free full text on PubMed Central</a>
+              <a href="https://github.com/Breeding-Insight/HapApp_utils">Pipeline source code</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="band alt" id="tools" aria-labelledby="tools-title">
+        <div class="wrap">
+          <div class="section-head">
+            <h2 id="tools-title">Continue your analysis with Breeding Insight tools</h2>
+            <p>
+              Processed MADC files with fixed microhaplotype IDs are ready for downstream genomic analysis in
+              Breeding Insight's open-source software.
+            </p>
+          </div>
+          <div class="grid grid-3">
+            {% for tool in tools %}
+            <article class="card tool-card" aria-labelledby="tool-{{ loop.index }}">
+              <div class="tool-head">
+                {% if tool.logo %}
+                <img class="tool-logo{% if tool.logo_wide %} wide{% endif %}" src="{{ asset_base }}/tools/{{ tool.logo }}" alt="" loading="lazy">
+                {% else %}
+                <span class="tool-logo-fallback" aria-hidden="true">{{ tool.name }}</span>
+                {% endif %}
+                <div>
+                  <span class="tool-tag">{{ tool.tag }}</span>
+                  <h3 id="tool-{{ loop.index }}">{{ tool.name }}</h3>
+                </div>
+              </div>
+              <p>{{ tool.description }}</p>
+              <div class="tool-links">
+                {% if tool.website %}
+                <a href="{{ tool.website }}"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for {{ tool.name }}</span></a>
+                {% endif %}
+                <a href="{{ tool.github }}"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for {{ tool.name }}</span></a>
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          <div class="more-links">
+            <a class="btn btn-secondary" href="https://breedinginsight.org/open-source-software-solutions/">All Breeding Insight software</a>
+            <a class="btn btn-secondary" href="https://github.com/Breeding-Insight">Breeding Insight on GitHub</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="band cta" aria-label="Sign in">
+        <div class="wrap">
+          <div class="section-head">
+            <p>
+              Sign in with your ORCID iD to upload a MADC report. Your ORCID iD and metadata are recorded with
+              each submission so the data you share is credited to you.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="{{ login_url }}">
+              <svg class="orcid-icon" aria-hidden="true" focusable="false"><use href="#icon-orcid"/></svg>
+              Sign in with ORCID iD
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <ul class="partner-logos" aria-label="Partner organizations">
+          <li class="logo-bi"><img src="{{ asset_base }}/breeding-insight-logo-white.png" width="154" height="56" alt="Breeding Insight"></li>
+          <li><img src="{{ asset_base }}/usda-ars-logo-white.png" width="139" height="44" alt="USDA Agricultural Research Service"></li>
+          <li class="logo-ifas"><img src="{{ asset_base }}/uf-ifas-logo.svg" width="132" height="44" alt="University of Florida Institute of Food and Agricultural Sciences (UF/IFAS)"></li>
+          <li><img src="{{ asset_base }}/cornell-logo-white.png" width="173" height="44" alt="Cornell University"></li>
+        </ul>
+        <p class="funding">
+          Breeding Insight is funded by the U.S. Department of Agriculture (USDA) Agricultural Research Service (ARS)
+          through University of Florida/IFAS. Formerly funded through Cornell University.
+        </p>
+        <div class="footer-bottom">
+          <p>&copy; {{ year }} Breeding Insight &middot; HapApp v{{ version }}</p>
+          <ul>
+            <li><a href="https://breedinginsight.org/about-bi/">About Breeding Insight</a></li>
+            <li><a href="https://breedinginsight.org/contact-us/">Contact us</a></li>
+            <li><a href="https://github.com/Breeding-Insight/HapApp-online">Source code</a></li>
+          </ul>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

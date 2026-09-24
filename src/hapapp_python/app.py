@@ -29,7 +29,7 @@ from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_upda
 from dash.dependencies import ClientsideFunction
 from dash.exceptions import PreventUpdate
 from dash_iconify import DashIconify
-from flask import Flask, redirect, request
+from flask import Flask, redirect, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from hapapp_python import config
@@ -1892,35 +1892,69 @@ def _madc_tab() -> html.Div:
     )
 
 
+LANDING_TOOLS = (
+    {
+        "name": "BIGapp",
+        "logo": "bigapp.png",
+        "tag": "Genomic analysis",
+        "description": "A user-friendly Shiny app for genotype calling from read counts, population structure, GWAS, "
+        "and genomic selection in diploid and polyploid species.",
+        "website": "https://breedinginsight.org/bigapp/",
+        "github": "https://github.com/Breeding-Insight/BIGapp",
+    },
+    {
+        "name": "Qploidy2",
+        "logo": "qploidy2.png",
+        "tag": "Ploidy and CNV",
+        "description": "Estimates ploidy, aneuploidy, and large-scale copy number variation from genetic marker data.",
+        "website": "https://breedinginsight.org/qploidy/",
+        "github": "https://github.com/Breeding-Insight/Qploidy2",
+    },
+    {
+        "name": "AlloMate",
+        "logo": "allomate.png",
+        "tag": "Mate allocation",
+        "description": "A Shiny app that simplifies mate allocation decisions for breeders.",
+        "website": "https://breedinginsight.org/allomate/",
+        "github": "https://github.com/Breeding-Insight/AlloMate",
+    },
+    {
+        "name": "BIGr",
+        "logo": "bigr.png",
+        "tag": "R package",
+        "description": "Functions developed by Breeding Insight to analyze diploid and polyploid breeding and genetic data.",
+        "website": "https://breeding-insight.github.io/BIGr_documentation/",
+        "github": "https://github.com/Breeding-Insight/BIGr",
+    },
+    {
+        "name": "GenoBrew",
+        "logo": "genobrew.png",
+        "tag": "Panel evaluation",
+        "description": "A Shiny app for evaluating marker panel efficiency and visualizing copy number variation profiles.",
+        "website": None,
+        "github": "https://github.com/Breeding-Insight/GenoBrew",
+    },
+    {
+        "name": "DeltaBreed",
+        "logo": "deltabreed.svg",
+        "logo_wide": True,
+        "tag": "Data management",
+        "description": "Open-source breeding data management software for specialty crop and animal breeders.",
+        "website": "https://breedinginsight.org/learning-hub/deltabreed/",
+        "github": "https://github.com/Breeding-Insight/DeltaBreed",
+    },
+)
+
+
 def _landing_page() -> str:
-    return """
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>HapApp</title>
-        <style>
-          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; }
-          main { min-height: 100vh; display: grid; place-items: center; background: #f5f8fa; color: #263746; }
-          section { width: min(520px, calc(100vw - 32px)); }
-          h1 { margin: 0 0 8px; font-size: 40px; }
-          p { margin: 0 0 24px; color: #52606d; }
-          a { display: inline-block; background: #A6CE39; color: #1f2d1f; padding: 10px 14px; border-radius: 4px;
-              text-decoration: none; font-weight: 700; }
-        </style>
-      </head>
-      <body>
-        <main>
-          <section>
-            <h1>HapApp</h1>
-            <p>Microhaplotype assignment workflow</p>
-            <a href="/auth/login">Sign in with ORCID iD</a>
-          </section>
-        </main>
-      </body>
-    </html>
-    """
+    return render_template(
+        "landing.html",
+        asset_base="/app/assets/landing",
+        login_url="/auth/login",
+        tools=LANDING_TOOLS,
+        version=__version__,
+        year=datetime.now(timezone.utc).year,
+    )
 
 
 def create_server() -> Flask:

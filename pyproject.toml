@@ -28,4 +28,4 @@ hapapp-online = "hapapp_python.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-hapapp_python = ["py.typed", "panels.toml"]
+hapapp_python = ["py.typed", "panels.toml", "templates/*.html"]
