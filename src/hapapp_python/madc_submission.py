@@ -25,7 +25,7 @@ MADC_SUBMISSION_DECISIONS = {"submitted_for_review", "declined"}
 MADC_REVIEW_STATUSES = {"submitted_for_review", "changes_requested", "accepted", "incorporated", "rejected"}
 MADC_FRESHNESS_STATUSES = {"unknown", "current", "stale"}
 MADC_ARCHIVE_STATUSES = {"pending", "archived", "not_configured", "failed"}
-DAL_PROJECT_RE = re.compile(r"(?<![A-Za-z0-9])DA[LI]\d{2}[-_]\d{4}(?![A-Za-z0-9])", re.IGNORECASE)
+FORMAL_PROJECT_RE = re.compile(r"(?<![A-Za-z0-9])D[A-Z]{1,3}\d{2}[-_]\d{4,}(?![A-Za-z0-9])", re.IGNORECASE)
 DAI_PROJECT_RE = re.compile(r"(?<![A-Za-z0-9])(?:DAI[-_]?)?\d{5,}(?![A-Za-z0-9])", re.IGNORECASE)
 
 
@@ -99,7 +99,7 @@ def infer_genotyping_project_id(filename: str | None) -> str | None:
     name = Path(filename or "").name
     project_ids: list[str] = []
 
-    for match in DAL_PROJECT_RE.finditer(name):
+    for match in FORMAL_PROJECT_RE.finditer(name):
         project_ids.append(match.group(0).replace("_", "-"))
 
     if project_ids:

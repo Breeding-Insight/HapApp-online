@@ -57,6 +57,20 @@ class MADCSubmissionTests(unittest.TestCase):
             "DAl22-7011",
         )
         self.assertEqual(
+            infer_genotyping_project_id("DAl25-10253_MADC_snpID_rename(1).csv"),
+            "DAl25-10253",
+        )
+        self.assertEqual(
+            infer_genotyping_project_id("DAl26-11931_MADC_snpID_rename_v1.csv"),
+            "DAl26-11931",
+        )
+        self.assertEqual(
+            infer_genotyping_project_id("DWh26-11931_MADC_snpID_rename_v1.csv"),
+            "DWh26-11931",
+        )
+        self.assertEqual(infer_genotyping_project_id("DW26-11931_MADC.csv"), "DW26-11931")
+        self.assertEqual(infer_genotyping_project_id("DWht26-11931_MADC.csv"), "DWht26-11931")
+        self.assertEqual(
             infer_genotyping_project_id("DAl22_7011_MADC_Report_merged.csv"),
             "DAl22-7011",
         )
