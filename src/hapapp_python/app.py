@@ -754,13 +754,14 @@ def _archive_run_results(
     include_fixed_madc: bool,
     include_log: bool,
     selected_files: list[str] | None = None,
-) -> None:
+) -> bool:
+    """Archive a run's review files to Dropbox; return False when the upload failed."""
     if _snapshot_for_owner(run_id, owner_orcid_id) is None:
-        return
+        return False
     _refresh_run_log_file(run_id)
     state = _snapshot_for_owner(run_id, owner_orcid_id)
     if state is None or state.status != "completed":
-        return
+        return False
     try:
         state.metadata_file = _write_run_metadata_file(state, selected_files)
         messages = archive_madc_review_artifacts(
@@ -787,11 +788,12 @@ def _archive_run_results(
             if current and current.owner_orcid_id == owner_orcid_id:
                 current.archive_status = "failed"
                 current.archive_error = str(exc)
-        return
+        return False
     try:
         persist_submission_archive_status(run_id, owner_orcid_id, archive_status)
     except Exception as exc:  # noqa: BLE001 - archive completed even if its status write failed.
         LOGGER.warning("Could not record archive status for run %s: %s", run_id, exc)
+    return True
 
 
 def _record_submission_decision(run_id: str | None, owner_orcid_id: str, decision: str) -> bool:
@@ -1617,6 +1619,17 @@ def _madc_results_modal() -> dbc.Modal:
     )
 
 
+def _sharing_failed_alert() -> dbc.Alert:
+    return dbc.Alert(
+        [
+            html.P(html.Strong("Sharing failed, so your results were not downloaded.")),
+            _science_team_contact("Please try again, or contact", className="mb-0"),
+        ],
+        color="danger",
+        className="run-alert",
+    )
+
+
 def _sharing_notice(what_is_shared: str) -> html.Div:
     return html.Div(
         [
@@ -1689,7 +1702,7 @@ def _science_team_contact(lead_in: str, className: str | None = None) -> html.P:
     return html.P(
         [
             f"{lead_in} the Breeding Insight Science team at ",
-            html.A(email, href=f"mailto:{email}"),
+            html.A(email, href=f"mailto:{email}", className="nowrap"),
             ".",
         ],
         className=className,
@@ -2695,13 +2708,14 @@ def register_callbacks(app: Dash) -> None:
 
     @app.callback(
         Output("madc-download", "data"),
+        Output("madc-alert", "children", allow_duplicate=True),
         Input("madc-submission-request", "data"),
         prevent_initial_call=True,
         running=[(Output("madc-download-progress-modal", "is_open"), True, False)],
     )
     def submit_and_download_madc(request_data):
         if not isinstance(request_data, dict):
-            return no_update
+            return no_update, no_update
 
         run_id = request_data.get("run_id")
         selected = request_data.get("selected")
@@ -2709,16 +2723,16 @@ def register_callbacks(app: Dash) -> None:
         _sync_submission_state(run_id, owner_orcid_id)
         state = _snapshot_for_owner(run_id, owner_orcid_id)
         if state is None or state.submission_status in MADC_CLOSED_SUBMISSION_STATUSES | {"publishing"}:
-            return no_update
+            return no_update, no_update
 
         if state.submission_status == "awaiting_decision":
             _, new_allele_count = _madc_result_summary(state)
             if new_allele_count is None:
                 _append_log(run_id, "Could not determine the number of new alleles; sharing was blocked.")
-                return no_update
+                return no_update, no_update
             if new_allele_count == 0:
                 if not _record_submission_decision(run_id, owner_orcid_id, "submitted_for_review"):
-                    return no_update
+                    return no_update, no_update
                 _append_log(
                     run_id,
                     "No novel alleles were found. GitHub publication was skipped; files were shared for review.",
@@ -2728,26 +2742,35 @@ def register_callbacks(app: Dash) -> None:
                     uses_github_publication = _submission_uses_github_publication(state)
                 except GitHubPublicationError as exc:
                     _append_log(run_id, f"Could not determine submission publication mode: {exc}")
-                    return no_update
+                    return no_update, no_update
                 if uses_github_publication:
                     if not _publish_run_to_github(run_id, owner_orcid_id):
-                        return no_update
+                        return no_update, no_update
                 elif not _record_submission_decision(run_id, owner_orcid_id, "submitted_for_review"):
-                    return no_update
-            _archive_run_results(
+                    return no_update, no_update
+            state = _snapshot_for_owner(run_id, owner_orcid_id)
+        # Every download must have been shared: upload to Dropbox now, or again if an earlier
+        # attempt failed, and withhold the download when the upload fails.
+        if state is not None and state.archive_status not in {"archived", "not_configured"}:
+            archived = _archive_run_results(
                 run_id,
                 owner_orcid_id,
                 include_fixed_madc=True,
                 include_log=True,
                 selected_files=selected if isinstance(selected, list) else None,
             )
+            if not archived:
+                return no_update, _sharing_failed_alert()
         try:
-            return dcc.send_bytes(
-                _zip_selected(run_id, owner_orcid_id, selected, default_all=False),
-                f"madc_results_{str(run_id)[:8]}.zip",
+            return (
+                dcc.send_bytes(
+                    _zip_selected(run_id, owner_orcid_id, selected, default_all=False),
+                    f"madc_results_{str(run_id)[:8]}.zip",
+                ),
+                no_update,
             )
         except Exception:
-            return no_update
+            return no_update, no_update
 
     @app.callback(
         Output("madc-preview-table", "columns"),

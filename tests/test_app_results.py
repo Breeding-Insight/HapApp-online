@@ -425,7 +425,7 @@ class AppResultTests(unittest.TestCase):
             ):
                 result = callback({"run_id": "run", "selected": [result_file.name]})
 
-        self.assertIs(result, no_update)
+        self.assertEqual(result, (no_update, no_update))
         publish.assert_not_called()
         send_bytes.assert_not_called()
 
@@ -484,7 +484,7 @@ class AppResultTests(unittest.TestCase):
             ):
                 result = callback({"run_id": "run", "selected": [result_file.name]})
 
-        self.assertEqual(result, "download")
+        self.assertEqual(result, ("download", no_update))
         record.assert_called_once_with("run", "owner", "submitted_for_review")
         publish.assert_not_called()
         archive.assert_called_once()
@@ -552,11 +552,95 @@ class AppResultTests(unittest.TestCase):
             ):
                 result = callback({"run_id": "run", "selected": [fixed_madc.name]})
 
-        self.assertEqual(result, "download")
+        self.assertEqual(result, ("download", no_update))
         record.assert_called_once_with("run", "owner", "submitted_for_review")
         publication_mode.assert_not_called()
         publish.assert_not_called()
         archive.assert_called_once()
+
+    def _download_callback(self):
+        app = create_app()
+        return next(
+            callback.__wrapped__
+            for callback_data in app.callback_map.values()
+            if (callback := callback_data.get("callback")) is not None
+            and hasattr(callback, "__wrapped__")
+            and callback.__wrapped__.__name__ == "submit_and_download_madc"
+        )
+
+    def _shared_run(self, work_dir: Path, archive_status: str) -> RunState:
+        result_file = work_dir / "result.csv"
+        result_file.write_text("result", encoding="utf-8")
+        return RunState(
+            run_id="run",
+            kind="MADC",
+            work_dir=work_dir,
+            input_files=set(),
+            command=[],
+            owner_orcid_id="owner",
+            files=[result_file.name],
+            status="completed",
+            submission_status="submitted_for_review",
+            archive_status=archive_status,
+        )
+
+    def test_download_is_withheld_when_sharing_to_dropbox_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            state = self._shared_run(Path(tmp_dir), "pending")
+            with RUNS_LOCK:
+                RUNS[state.run_id] = state
+            callback = self._download_callback()
+            with (
+                patch("hapapp_python.app.get_current_user", return_value={"orcid_id": "owner"}),
+                patch("hapapp_python.app._sync_submission_state"),
+                patch("hapapp_python.app._archive_run_results", return_value=False) as archive,
+                patch("hapapp_python.app.dcc.send_bytes") as send_bytes,
+            ):
+                download, alert = callback({"run_id": "run", "selected": ["result.csv"]})
+
+        self.assertIs(download, no_update)
+        archive.assert_called_once()
+        send_bytes.assert_not_called()
+        alert_text = str(alert)
+        self.assertIn("Sharing failed, so your results were not downloaded.", alert_text)
+        self.assertIn("Please try again, or contact the Breeding Insight Science team at", alert_text)
+        self.assertIn("mailto:bi-science-team@ufl.edu", alert_text)
+
+    def test_retry_after_failed_sharing_uploads_again_before_downloading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            state = self._shared_run(Path(tmp_dir), "failed")
+            with RUNS_LOCK:
+                RUNS[state.run_id] = state
+            callback = self._download_callback()
+            with (
+                patch("hapapp_python.app.get_current_user", return_value={"orcid_id": "owner"}),
+                patch("hapapp_python.app._sync_submission_state"),
+                patch("hapapp_python.app._archive_run_results", return_value=True) as archive,
+                patch("hapapp_python.app._zip_selected", return_value=b"zip"),
+                patch("hapapp_python.app.dcc.send_bytes", return_value="download"),
+            ):
+                result = callback({"run_id": "run", "selected": ["result.csv"]})
+
+        self.assertEqual(result, ("download", no_update))
+        archive.assert_called_once()
+
+    def test_redownload_after_successful_sharing_does_not_upload_again(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            state = self._shared_run(Path(tmp_dir), "archived")
+            with RUNS_LOCK:
+                RUNS[state.run_id] = state
+            callback = self._download_callback()
+            with (
+                patch("hapapp_python.app.get_current_user", return_value={"orcid_id": "owner"}),
+                patch("hapapp_python.app._sync_submission_state"),
+                patch("hapapp_python.app._archive_run_results") as archive,
+                patch("hapapp_python.app._zip_selected", return_value=b"zip"),
+                patch("hapapp_python.app.dcc.send_bytes", return_value="download"),
+            ):
+                result = callback({"run_id": "run", "selected": ["result.csv"]})
+
+        self.assertEqual(result, ("download", no_update))
+        archive.assert_not_called()
 
     def test_zero_new_allele_package_excludes_missing_database_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
