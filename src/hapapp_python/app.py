@@ -53,6 +53,8 @@ from hapapp_python.github_submission import (
 from hapapp_python.github_recovery import recover_stranded_github_publications
 from hapapp_python.dropbox_archive import archive_madc_review_artifacts
 from hapapp_python.madc_submission import (
+    MADC_CLOSED_SUBMISSION_STATUSES,
+    MADC_REPLACEABLE_SUBMISSION_STATUSES,
     MADC_SUBMISSION_METADATA_FILENAME,
     MADCSubmissionMetadata,
     build_madc_submission_metadata,
@@ -987,6 +989,7 @@ def _submission_status_label(status: str) -> str:
         "incorporated": "Incorporated",
         "rejected": "Rejected",
         "declined": "Declined",
+        "superseded": "Replaced by a newer run",
     }.get(status, status.replace("_", " ").title())
 
 
@@ -997,6 +1000,7 @@ def _submission_review_alert(state: RunState) -> dbc.Alert:
         "incorporated": "success",
         "rejected": "danger",
         "declined": "secondary",
+        "superseded": "secondary",
     }.get(state.submission_status, "info")
     children: list = [html.Strong(_submission_status_label(state.submission_status))]
     if state.freshness_status == "stale":
@@ -1053,6 +1057,12 @@ def _preflight_status_children():
     )
 
 
+SUPERSEDED_RUN_MESSAGE = (
+    "This run was replaced by a newer run of the same MADC file, "
+    "so its results can no longer be shared or downloaded."
+)
+
+
 def _terminal_text(state: RunState | None) -> str:
     if state is None:
         return "Ready."
@@ -1064,11 +1074,13 @@ def _terminal_text(state: RunState | None) -> str:
             f"and include run ID {state.run_id}."
         )
         text = f"{text}\n\n{state.error}\n{assistance}".strip()
+    if state.submission_status == "superseded":
+        text = f"{text}\n\n{SUPERSEDED_RUN_MESSAGE}".strip()
     return text or "Running..."
 
 
 def _result_options(state: RunState | None) -> list[dict[str, str]]:
-    if state is None or state.submission_status == "declined":
+    if state is None or state.submission_status in MADC_CLOSED_SUBMISSION_STATUSES:
         return []
     return [{"label": file_path, "value": file_path} for file_path in state.files]
 
@@ -1409,6 +1421,8 @@ def _zip_selected(
         raise ValueError("No run is available for download")
     if state.submission_status == "declined":
         raise ValueError("This run was declined and its results are unavailable")
+    if state.submission_status == "superseded":
+        raise ValueError(SUPERSEDED_RUN_MESSAGE)
 
     available = set(state.files)
     chosen = state.files if default_all and not selected else selected or []
@@ -1695,6 +1709,80 @@ def _madc_verification_modal() -> dbc.Modal:
     )
 
 
+def _existing_run_state_label(duplicate: dict) -> str:
+    if duplicate.get("submission_status") == "declined":
+        return "Declined by the person who ran it"
+    with RUNS_LOCK:
+        live_run = RUNS.get(str(duplicate.get("run_id") or ""))
+        live_status = live_run.status if live_run else None
+    if live_status == "running":
+        return "Still processing"
+    if live_status == "failed":
+        return "Processing failed"
+    if live_status == "completed" or duplicate.get("output_checksums_json"):
+        return "Finished; results not yet shared with Breeding Insight"
+    return "Processing, or stopped before it finished"
+
+
+def _format_run_started(value: object) -> str:
+    try:
+        started = datetime.fromisoformat(str(value))
+    except ValueError:
+        return "Unknown"
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return started.astimezone(timezone.utc).strftime("%b %d, %Y at %H:%M UTC")
+
+
+def _madc_replace_run_details(duplicate: dict) -> list:
+    submitter = duplicate.get("submitter_display_name") or "Another user"
+    submitter_orcid = duplicate.get("submitter_orcid_id")
+    return [
+        html.P(
+            "This MADC filename and formal project ID already have a run that has not been shared with "
+            "Breeding Insight."
+        ),
+        html.Dl(
+            [
+                html.Dt("Run by"),
+                html.Dd(f"{submitter} (ORCID: {submitter_orcid})" if submitter_orcid else submitter),
+                html.Dt("Started"),
+                html.Dd(_format_run_started(duplicate.get("metadata_created_at"))),
+                html.Dt("Current state"),
+                html.Dd(_existing_run_state_label(duplicate)),
+                html.Dt("Run ID"),
+                html.Dd(str(duplicate.get("run_id") or "")),
+            ],
+            className="replace-run-summary",
+        ),
+        html.P(
+            "Replacing it cancels that run: its results can no longer be shared or downloaded. If it is still "
+            "processing, it will finish, but its results will be discarded.",
+            className="mb-0",
+        ),
+    ]
+
+
+def _madc_replace_run_modal() -> dbc.Modal:
+    return dbc.Modal(
+        [
+            dbc.ModalHeader(dbc.ModalTitle("Replace Existing Run?"), close_button=False),
+            dbc.ModalBody(html.Div(id="madc-replace-details")),
+            dbc.ModalFooter(
+                [
+                    dbc.Button("Cancel", id="madc-replace-cancel", color="secondary", outline=True),
+                    dbc.Button("Replace and Process", id="madc-replace-confirm", color="warning"),
+                ]
+            ),
+        ],
+        id="madc-replace-modal",
+        centered=True,
+        size="lg",
+        backdrop="static",
+        keyboard=False,
+    )
+
+
 def _required_label(label: str) -> list:
     return [label, html.Span(" *", className="required-marker", **{"aria-hidden": "true"})]
 
@@ -1906,6 +1994,7 @@ def _madc_tab() -> html.Div:
             _madc_results_modal(),
             _madc_submission_confirmation_modal(),
             _madc_verification_modal(),
+            _madc_replace_run_modal(),
         ]
     )
 
@@ -2059,6 +2148,7 @@ def create_app() -> Dash:
         [
             dcc.Store(id="madc-run-id"),
             dcc.Store(id="madc-panel-id"),
+            dcc.Store(id="madc-replace-target"),
             dcc.Interval(id="run-poller", interval=1000, n_intervals=0),
             dcc.Download(id="madc-download"),
             dcc.Store(id="madc-submission-request"),
@@ -2409,7 +2499,7 @@ def register_callbacks(app: Dash) -> None:
         if ctx.triggered_id in {"madc-download-button", "madc-submission-confirmation-submit"}:
             selected = list(dict.fromkeys((main_selected or []) + (diagnostic_selected or [])))
             state = _snapshot_for_owner(run_id, owner_orcid_id)
-            if state is None or state.submission_status == "declined":
+            if state is None or state.submission_status in MADC_CLOSED_SUBMISSION_STATUSES:
                 return (False,) + (no_update,) * 12 + (False, no_update)
 
             if ctx.triggered_id == "madc-download-button" and state.submission_status == "awaiting_decision":
@@ -2435,7 +2525,7 @@ def register_callbacks(app: Dash) -> None:
             return (False,) + (no_update,) * 11 + (request_data, False, no_update)
 
         state = _snapshot_for_owner(run_id, owner_orcid_id)
-        if not state or not state.files or state.submission_status == "declined":
+        if not state or not state.files or state.submission_status in MADC_CLOSED_SUBMISSION_STATUSES:
             return (
                 False,
                 no_update,
@@ -2519,7 +2609,7 @@ def register_callbacks(app: Dash) -> None:
         owner_orcid_id = (get_current_user() or {}).get("orcid_id", "")
         _sync_submission_state(run_id, owner_orcid_id)
         state = _snapshot_for_owner(run_id, owner_orcid_id)
-        if state is None or state.submission_status in {"declined", "publishing"}:
+        if state is None or state.submission_status in MADC_CLOSED_SUBMISSION_STATUSES | {"publishing"}:
             return no_update
 
         if state.submission_status == "awaiting_decision":
@@ -2677,8 +2767,13 @@ def register_callbacks(app: Dash) -> None:
         Output("madc-alert", "children"),
         Output("madc-verification-modal", "is_open"),
         Output("madc-verification-details", "children"),
+        Output("madc-replace-modal", "is_open"),
+        Output("madc-replace-details", "children"),
+        Output("madc-replace-target", "data"),
         Input("madc-run-button", "n_clicks"),
         Input("madc-verification-close", "n_clicks"),
+        Input("madc-replace-confirm", "n_clicks"),
+        Input("madc-replace-cancel", "n_clicks"),
         State("madc-report-upload", "fileNames"),
         State("madc-report-upload", "upload_id"),
         State("madc-report-upload", "isCompleted"),
@@ -2689,6 +2784,7 @@ def register_callbacks(app: Dash) -> None:
         State("madc-submitted-for-location", "value"),
         State("madc-submitted-for-email", "value"),
         State("madc-submitted-for-institution", "value"),
+        State("madc-replace-target", "data"),
         prevent_initial_call=True,
         running=[
             (Output("madc-preflight-status", "children"), _preflight_status_children(), []),
@@ -2704,6 +2800,8 @@ def register_callbacks(app: Dash) -> None:
     def start_madc(
         _process_clicks,
         _close_clicks,
+        _replace_confirm_clicks,
+        _replace_cancel_clicks,
         report_files,
         report_upload_id,
         report_completed,
@@ -2714,11 +2812,14 @@ def register_callbacks(app: Dash) -> None:
         submitted_for_location,
         submitted_for_email,
         submitted_for_institution,
+        replace_target,
     ):
-        if ctx.triggered_id == "madc-verification-close":
-            return no_update, no_update, False, no_update
-        if _process_clicks % 2 != 0:
-            return no_update, no_update, False, no_update
+        closed = (no_update, no_update, False, no_update, False, no_update, None)
+        if ctx.triggered_id in {"madc-verification-close", "madc-replace-cancel"}:
+            return closed
+        replace_confirmed = ctx.triggered_id == "madc-replace-confirm"
+        if not replace_confirmed and (_process_clicks or 0) % 2 != 0:
+            return closed
 
         try:
             report_source = _uploaded_file_path(
@@ -2738,12 +2839,33 @@ def register_callbacks(app: Dash) -> None:
                 raise ValueError("Complete required submission metadata: " + ", ".join(missing_metadata))
 
             duplicate = find_duplicate_madc_submission(report_source.name, str(inferred_project_id))
+            replaced_run_id = None
             if duplicate:
-                raise ValueError(
-                    "This MADC filename and formal project ID were already processed "
-                    f"(run {duplicate.get('run_id')}, status {duplicate.get('submission_status')}). "
-                    f"To replace the prior record, contact {config.BI_SCIENCE_TEAM_CONTACT}."
-                )
+                duplicate_status = str(duplicate.get("submission_status") or "unknown")
+                duplicate_run_id = str(duplicate.get("run_id") or "")
+                if duplicate_status == "publishing":
+                    raise ValueError(
+                        "This MADC file is being published to GitHub right now. Please try again in a minute."
+                    )
+                if duplicate_status not in MADC_REPLACEABLE_SUBMISSION_STATUSES:
+                    raise ValueError(
+                        "This MADC filename and formal project ID were already processed and shared with "
+                        f"Breeding Insight (run {duplicate_run_id}, "
+                        f"status: {_submission_status_label(duplicate_status)}). "
+                        f"To replace the prior record, contact {config.BI_SCIENCE_TEAM_CONTACT}."
+                    )
+                if not (replace_confirmed and replace_target == duplicate_run_id):
+                    # Show who ran it and its state; only an explicit approval replaces it.
+                    return (
+                        no_update,
+                        no_update,
+                        False,
+                        no_update,
+                        True,
+                        _madc_replace_run_details(duplicate),
+                        duplicate_run_id,
+                    )
+                replaced_run_id = duplicate_run_id
 
             # User-facing MADC parameters live on the selected species panel.
             panel = get_madc_panel(panel_id)
@@ -2818,7 +2940,7 @@ def register_callbacks(app: Dash) -> None:
                 input_github_commit_sha=input_github_commit_sha,
             )
             write_submission_metadata(work_dir, metadata)
-            persist_submission_metadata(metadata)
+            persist_submission_metadata(metadata, replace_run_id=replaced_run_id)
             run_id = _start_run(
                 "MADC hap assignment",
                 command,
@@ -2829,6 +2951,8 @@ def register_callbacks(app: Dash) -> None:
                 run_id=run_id,
             )
             _append_log(run_id, "Submission metadata recorded in database.")
+            if replaced_run_id:
+                _append_log(run_id, f"This run replaces earlier unshared run {replaced_run_id} of the same MADC file.")
             if madc_check.warnings:
                 alert = dbc.Alert(
                     [
@@ -2849,16 +2973,20 @@ def register_callbacks(app: Dash) -> None:
                     className="run-alert",
                 )
 
-            return run_id, alert, False, []
+            return run_id, alert, False, [], False, no_update, None
         except MADCValidationError as exc:
             return (
                 no_update,
                 dbc.Alert("MADC verification failed", color="danger", className="run-alert"),
                 True,
                 _madc_verification_details(exc),
+                False,
+                no_update,
+                None,
             )
         except Exception as exc:  # noqa: BLE001 - shown in UI.
-            return no_update, dbc.Alert(str(exc), color="danger", className="run-alert"), False, []
+            alert = dbc.Alert(str(exc), color="danger", className="run-alert")
+            return no_update, alert, False, [], False, no_update, None
 
     @app.callback(
         Output("madc-terminal", "children"),
@@ -2887,7 +3015,13 @@ def register_callbacks(app: Dash) -> None:
             options,
             len(options) == 0 or stale_awaiting_decision or publication_in_progress,
             len(options) == 0,
-            "Results Declined" if state and state.submission_status == "declined" else "View Results",
+            (
+                "Results Declined"
+                if state and state.submission_status == "declined"
+                else "Run Replaced"
+                if state and state.submission_status == "superseded"
+                else "View Results"
+            ),
         )
 
     @app.callback(

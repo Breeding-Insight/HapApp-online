@@ -123,6 +123,96 @@ class FirestoreRepositoryTests(unittest.TestCase):
         self.assertEqual(client.data[("submission_keys", "key")]["run_id"], "run-1")
 
     @patch("hapapp_python.database.firestore.transactional", side_effect=synchronous_transaction)
+    def test_new_run_supersedes_unshared_run_with_same_key(self, _transactional) -> None:
+        client = FakeClient()
+        repository = FirestoreRepository(client)
+        values = {"madc_filename": "report.csv", "inferred_project_id": "DAI-1", "submitter_orcid_id": "a"}
+        replaceable = frozenset({"awaiting_decision", "declined", "superseded"})
+
+        repository.upsert_submission("run-1", values, duplicate_key_id="key", replaceable_statuses=replaceable)
+        repository.upsert_submission(
+            "run-2",
+            {**values, "submitter_orcid_id": "b"},
+            duplicate_key_id="key",
+            replace_run_id="run-1",
+            replaceable_statuses=replaceable,
+        )
+
+        self.assertEqual(client.data[("submission_keys", "key")]["run_id"], "run-2")
+        superseded = client.data[("madc_submissions", "run-1")]
+        self.assertEqual(superseded["submission_status"], "superseded")
+        self.assertEqual(superseded["superseded_by_run_id"], "run-2")
+        self.assertEqual(client.data[("madc_submissions", "run-2")]["submission_status"], "awaiting_decision")
+        # The replaced run can no longer be claimed for publication or declined.
+        self.assertEqual(
+            repository.update_submission(
+                "run-1",
+                {"submission_status": "publishing"},
+                submitter_orcid_id="a",
+                expected_submission_status="awaiting_decision",
+            ),
+            0,
+        )
+
+    @patch("hapapp_python.database.firestore.transactional", side_effect=synchronous_transaction)
+    def test_unshared_run_is_not_replaced_without_approval(self, _transactional) -> None:
+        client = FakeClient()
+        repository = FirestoreRepository(client)
+        values = {"madc_filename": "report.csv", "inferred_project_id": "DAI-1"}
+        replaceable = frozenset({"awaiting_decision", "declined", "superseded"})
+        repository.upsert_submission("run-1", values, duplicate_key_id="key", replaceable_statuses=replaceable)
+
+        for approved in (None, "some-other-run"):
+            with self.assertRaisesRegex(DuplicateSubmissionError, "already processed"):
+                repository.upsert_submission(
+                    "run-2",
+                    values,
+                    duplicate_key_id="key",
+                    replace_run_id=approved,
+                    replaceable_statuses=replaceable,
+                )
+
+        self.assertEqual(client.data[("submission_keys", "key")]["run_id"], "run-1")
+        self.assertEqual(client.data[("madc_submissions", "run-1")]["submission_status"], "awaiting_decision")
+
+    @patch("hapapp_python.database.firestore.transactional", side_effect=synchronous_transaction)
+    def test_shared_run_is_not_superseded(self, _transactional) -> None:
+        client = FakeClient()
+        repository = FirestoreRepository(client)
+        values = {"madc_filename": "report.csv", "inferred_project_id": "DAI-1"}
+        replaceable = frozenset({"awaiting_decision", "declined", "superseded"})
+        repository.upsert_submission("run-1", values, duplicate_key_id="key", replaceable_statuses=replaceable)
+        client.data[("madc_submissions", "run-1")]["submission_status"] = "submitted_for_review"
+
+        with self.assertRaisesRegex(DuplicateSubmissionError, "already processed"):
+            repository.upsert_submission(
+                "run-2", values, duplicate_key_id="key", replace_run_id="run-1", replaceable_statuses=replaceable
+            )
+
+        self.assertEqual(client.data[("submission_keys", "key")]["run_id"], "run-1")
+        self.assertEqual(client.data[("madc_submissions", "run-1")]["submission_status"], "submitted_for_review")
+        self.assertNotIn(("madc_submissions", "run-2"), client.data)
+
+    @patch("hapapp_python.database.firestore.transactional", side_effect=synchronous_transaction)
+    def test_updating_replaced_run_does_not_reclaim_key(self, _transactional) -> None:
+        client = FakeClient()
+        repository = FirestoreRepository(client)
+        values = {"madc_filename": "report.csv", "inferred_project_id": "DAI-1"}
+        replaceable = frozenset({"awaiting_decision", "declined", "superseded"})
+        repository.upsert_submission("run-1", values, duplicate_key_id="key", replaceable_statuses=replaceable)
+        repository.upsert_submission(
+            "run-2", values, duplicate_key_id="key", replace_run_id="run-1", replaceable_statuses=replaceable
+        )
+
+        with self.assertRaisesRegex(DuplicateSubmissionError, "already processed"):
+            repository.upsert_submission(
+                "run-1", values, duplicate_key_id="key", replace_run_id="run-2", replaceable_statuses=replaceable
+            )
+
+        self.assertEqual(client.data[("submission_keys", "key")]["run_id"], "run-2")
+        self.assertEqual(client.data[("madc_submissions", "run-2")]["submission_status"], "awaiting_decision")
+
+    @patch("hapapp_python.database.firestore.transactional", side_effect=synchronous_transaction)
     def test_publication_claim_conditions_are_atomic(self, _transactional) -> None:
         client = FakeClient()
         client.data[("madc_submissions", "run")] = {

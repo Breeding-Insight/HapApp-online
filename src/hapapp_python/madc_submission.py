@@ -20,7 +20,12 @@ MADC_SUBMISSION_STATUSES = {
     "incorporated",
     "rejected",
     "declined",
+    "superseded",
 }
+# A newer run of the same MADC file may replace a run that was never shared with Breeding Insight.
+MADC_REPLACEABLE_SUBMISSION_STATUSES = frozenset({"awaiting_decision", "declined", "superseded"})
+# Results of these runs can no longer be shared or downloaded.
+MADC_CLOSED_SUBMISSION_STATUSES = frozenset({"declined", "superseded"})
 MADC_SUBMISSION_DECISIONS = {"submitted_for_review", "declined"}
 MADC_REVIEW_STATUSES = {"submitted_for_review", "changes_requested", "accepted", "incorporated", "rejected"}
 MADC_FRESHNESS_STATUSES = {"unknown", "current", "stale"}
@@ -174,7 +179,13 @@ def find_duplicate_madc_submission(
     return repository.find_duplicate_submission(_duplicate_key_id(filename, project_id))
 
 
-def persist_submission_metadata(metadata: MADCSubmissionMetadata, db: FirestoreRepository | None = None) -> None:
+def persist_submission_metadata(
+    metadata: MADCSubmissionMetadata,
+    db: FirestoreRepository | None = None,
+    *,
+    replace_run_id: str | None = None,
+) -> None:
+    """Store submission metadata; ``replace_run_id`` names an unshared run the user approved replacing."""
     repository = db or FirestoreRepository()
     payload = asdict(metadata)
     normalized_filename = Path(metadata.madc_filename).name.strip()
@@ -188,6 +199,8 @@ def persist_submission_metadata(metadata: MADCSubmissionMetadata, db: FirestoreR
             if normalized_project_id
             else None
         ),
+        replace_run_id=replace_run_id,
+        replaceable_statuses=MADC_REPLACEABLE_SUBMISSION_STATUSES,
     )
 
 

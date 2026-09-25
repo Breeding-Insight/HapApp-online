@@ -22,6 +22,7 @@ from hapapp_python.app import (
     _fixed_madc_result_file,
     _identify_uploaded_madc_panel,
     _list_files,
+    _madc_replace_run_details,
     _madc_verification_details,
     _madc_previous_db_version,
     _madc_result_summary,
@@ -258,6 +259,59 @@ class AppResultTests(unittest.TestCase):
             "and include run ID run-123.",
             text,
         )
+
+    def test_replace_run_details_show_owner_start_and_live_state(self) -> None:
+        duplicate = {
+            "run_id": "run-old",
+            "submission_status": "awaiting_decision",
+            "submitter_display_name": "Jane Doe",
+            "submitter_orcid_id": "0000-0001-2345-6789",
+            "metadata_created_at": "2026-09-25T10:42:00+00:00",
+        }
+        running = RunState(
+            run_id="run-old",
+            kind="MADC",
+            work_dir=Path("/work"),
+            input_files=set(),
+            command=[],
+            status="running",
+        )
+        with RUNS_LOCK:
+            RUNS["run-old"] = running
+        try:
+            details = str(_madc_replace_run_details(duplicate))
+        finally:
+            with RUNS_LOCK:
+                RUNS.pop("run-old", None)
+
+        self.assertIn("Jane Doe (ORCID: 0000-0001-2345-6789)", details)
+        self.assertIn("Sep 25, 2026 at 10:42 UTC", details)
+        self.assertIn("Still processing", details)
+        self.assertIn("run-old", details)
+
+    def test_replace_run_details_use_stored_results_when_run_is_not_in_memory(self) -> None:
+        finished = str(_madc_replace_run_details({"run_id": "gone", "output_checksums_json": "{}"}))
+        unknown = str(_madc_replace_run_details({"run_id": "gone"}))
+        declined = str(_madc_replace_run_details({"run_id": "gone", "submission_status": "declined"}))
+
+        self.assertIn("Finished; results not yet shared with Breeding Insight", finished)
+        self.assertIn("Processing, or stopped before it finished", unknown)
+        self.assertIn("Declined by the person who ran it", declined)
+
+    def test_superseded_run_hides_results_and_explains_why(self) -> None:
+        state = RunState(
+            run_id="run-old",
+            kind="MADC",
+            work_dir=Path("/work"),
+            input_files=set(),
+            command=[],
+            status="completed",
+            files=["report_fixed.csv"],
+            submission_status="superseded",
+        )
+
+        self.assertEqual(_result_options(state), [])
+        self.assertIn("replaced by a newer run of the same MADC file", _terminal_text(state))
 
     def test_submission_summary_hides_internal_status_and_freshness(self) -> None:
         state = RunState(

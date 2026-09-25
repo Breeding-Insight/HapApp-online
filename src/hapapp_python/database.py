@@ -87,7 +87,16 @@ class FirestoreRepository:
         values: dict[str, Any],
         *,
         duplicate_key_id: str | None,
+        replace_run_id: str | None = None,
+        replaceable_statuses: frozenset[str] = frozenset(),
     ) -> None:
+        """Store a submission and claim its filename/project key.
+
+        A new submission may take the key only from ``replace_run_id`` (the run the
+        user approved replacing), and only while that run's status is in
+        ``replaceable_statuses``; that run is marked superseded. Updates to an
+        existing submission never take a key from another run.
+        """
         transaction = self.client.transaction()
 
         @firestore.transactional
@@ -109,12 +118,24 @@ class FirestoreRepository:
                 old_key_ref = self.client.collection(SUBMISSION_KEYS_COLLECTION).document(str(old_key_id))
                 old_key_snapshot = old_key_ref.get(transaction=transaction)
 
+            superseded_ref = None
             if new_key_snapshot is not None and new_key_snapshot.exists:
                 key_owner = str((new_key_snapshot.to_dict() or {}).get("run_id") or "")
                 if key_owner and key_owner != run_id:
-                    raise DuplicateSubmissionError(
-                        "This MADC filename and formal project ID were already processed."
+                    owner_ref = self.client.collection(SUBMISSIONS_COLLECTION).document(key_owner)
+                    owner_snapshot = owner_ref.get(transaction=transaction)
+                    owner_status = (
+                        (owner_snapshot.to_dict() or {}).get("submission_status") if owner_snapshot.exists else None
                     )
+                    replaceable = key_owner == replace_run_id and (
+                        not owner_snapshot.exists or owner_status in replaceable_statuses
+                    )
+                    if submission_snapshot.exists or not replaceable:
+                        raise DuplicateSubmissionError(
+                            "This MADC filename and formal project ID were already processed."
+                        )
+                    if owner_snapshot.exists:
+                        superseded_ref = owner_ref
 
             now = _utcnow()
             document = {
@@ -133,6 +154,12 @@ class FirestoreRepository:
                     }
                 )
             transaction.set(submission_ref, document, merge=True)
+
+            if superseded_ref is not None:
+                transaction.update(
+                    superseded_ref,
+                    {"submission_status": "superseded", "superseded_by_run_id": run_id, "updated_at": now},
+                )
 
             if new_key_ref is not None:
                 transaction.set(

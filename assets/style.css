@@ -622,6 +622,24 @@ label,
   margin-bottom: 0;
 }
 
+.replace-run-summary {
+  display: grid;
+  gap: 6px 16px;
+  grid-template-columns: max-content 1fr;
+  margin: 0 0 16px;
+}
+
+.replace-run-summary dt {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.replace-run-summary dd {
+  color: var(--text-muted);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .verification-contact {
   color: var(--text-main);
   font-size: 13px;
