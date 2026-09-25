@@ -2310,6 +2310,14 @@ def register_callbacks(app: Dash) -> None:
         Output("madc-terminal-scroll", "data"),
         Input("madc-terminal", "children"),
     )
+    # Close the replace confirmation as soon as it is approved; the run start that follows
+    # retrieves panel files and validates the MADC, which can take several seconds.
+    app.clientside_callback(
+        "function () { return false; }",
+        Output("madc-replace-modal", "is_open", allow_duplicate=True),
+        Input("madc-replace-confirm", "n_clicks"),
+        prevent_initial_call=True,
+    )
 
     @app.callback(
         Output("madc-submission-confirmation-summary", "children", allow_duplicate=True),
