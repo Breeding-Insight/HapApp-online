@@ -140,10 +140,12 @@ With minimum instances at `0`, Cloud Run scales the service to zero once no requ
 arrive, keeping an idle instance for up to 15 minutes. While a run is shown, the app
 page polls the server once a second, which keeps the instance alive for the run,
 review, and download. After 5 minutes without user activity the page stops polling
-(`assets/inactivity-pause.js`), so a forgotten tab cannot keep the service running.
+(`assets/inactivity-pause.js`), so a forgotten tab cannot keep the service running;
+any activity resumes polling. If the page has results that were not downloaded, it
+warns the user when it pauses that they can be deleted within the next 15 minutes.
 Runs normally finish in well under a minute; results that are not downloaded before
-the instance scales down are lost, and the file can be processed again using the
-replace-run confirmation.
+the instance scales down are lost, the page says so when the user returns, and the
+file can be processed again using the replace-run confirmation.
 
 Do not raise maximum instances above one until run files move to Cloud Storage and
 processing is dispatched to durable Cloud Run Jobs.

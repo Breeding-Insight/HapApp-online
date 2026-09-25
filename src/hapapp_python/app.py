@@ -1060,6 +1060,12 @@ def _preflight_status_children():
     )
 
 
+RESULTS_LOST_MESSAGE = (
+    "Your results are no longer available.\n"
+    "The HapApp server shut down after a period of inactivity, and results that weren't "
+    "downloaded were deleted. Please process your MADC file again."
+)
+
 SUPERSEDED_RUN_MESSAGE = (
     "This run was replaced by a newer run of the same MADC file, "
     "so its results can no longer be shared or downloaded."
@@ -2205,6 +2211,7 @@ def create_app() -> Dash:
             dcc.Download(id="madc-download"),
             dcc.Store(id="madc-submission-request"),
             dcc.Store(id="madc-terminal-scroll"),
+            html.Span("false", id="madc-unsaved-results", hidden=True),
             html.Header(
                 [
                     html.Div(
@@ -3053,6 +3060,7 @@ def register_callbacks(app: Dash) -> None:
         Output("madc-download-button", "disabled"),
         Output("madc-results-button", "disabled"),
         Output("madc-results-button", "children"),
+        Output("madc-unsaved-results", "children"),
         Input("run-poller", "n_intervals"),
         Input("madc-run-id", "data"),
     )
@@ -3067,8 +3075,12 @@ def register_callbacks(app: Dash) -> None:
             state and state.submission_status == "awaiting_decision" and state.freshness_status == "stale"
         )
         publication_in_progress = bool(state and state.submission_status == "publishing")
+        # Read by assets/inactivity-pause.js to decide whether the inactivity warning is needed.
+        unsaved_results = bool(
+            state and state.status == "completed" and state.submission_status == "awaiting_decision" and options
+        )
         return (
-            _terminal_text(state),
+            _terminal_text(state) if state is not None or not run_id else RESULTS_LOST_MESSAGE,
             _status_text(state),
             options,
             len(options) == 0 or stale_awaiting_decision or publication_in_progress,
@@ -3080,6 +3092,7 @@ def register_callbacks(app: Dash) -> None:
                 if state and state.submission_status == "superseded"
                 else "View Results"
             ),
+            "true" if unsaved_results else "false",
         )
 
     @app.callback(

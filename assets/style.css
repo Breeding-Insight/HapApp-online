@@ -639,23 +639,40 @@ textarea:focus-visible,
   outline-color: #ffffff !important;
 }
 
-.app-paused-banner {
-  background: var(--footer-bg);
-  border: 2px solid #ffffff;
-  border-radius: 8px;
+.inactivity-warning {
+  background: #ffffff;
+  border: 2px solid var(--footer-bg);
+  border-radius: 10px;
   bottom: 24px;
-  box-shadow: 0 8px 24px rgba(12, 50, 55, 0.25);
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(12, 50, 55, 0.3);
+  color: var(--text-main);
   left: 50%;
-  max-width: min(640px, calc(100vw - 32px));
-  padding: 14px 20px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 20px 22px;
   position: fixed;
-  text-align: center;
   transform: translateX(-50%);
+  width: 100%;
   z-index: 2000;
 }
+
+.inactivity-warning h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.inactivity-warning p {
+  color: var(--text-main);
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+
+.inactivity-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 
 .download-progress {
   align-items: flex-start;
