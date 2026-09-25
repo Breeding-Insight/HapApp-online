@@ -29,7 +29,7 @@ from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_upda
 from dash.dependencies import ClientsideFunction
 from dash.exceptions import PreventUpdate
 from dash_iconify import DashIconify
-from flask import Flask, redirect, render_template, request
+from flask import Flask, Response, redirect, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from hapapp_python import config
@@ -2178,6 +2178,13 @@ def create_server() -> Flask:
         if config.PUBLIC_URL and request.host != config.PUBLIC_HOST:
             return redirect(f"{config.PUBLIC_URL}{request.full_path.rstrip('?')}", code=302)
         return None
+
+    @server.route("/robots.txt")
+    def robots_txt():
+        # Ask crawlers to stay away: every visit wakes the Cloud Run instance from zero.
+        response = Response("User-agent: *\nDisallow: /\n", mimetype="text/plain")
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
 
     @server.route("/")
     def landing_page():

@@ -198,6 +198,13 @@ class AuthTests(unittest.TestCase):
         self.assertIn("--accent: #066a73", stylesheet)
         self.assertIn("--footer-bg: #0c3237", stylesheet)
 
+    def test_robots_txt_disallows_all_crawling(self) -> None:
+        response = create_server().test_client().get("/robots.txt")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/plain")
+        self.assertEqual(response.get_data(as_text=True), "User-agent: *\nDisallow: /\n")
+
     def test_local_auth_bypass_provides_stable_identity(self) -> None:
         server = create_server()
         server.route("/current-user")(lambda: get_current_user())
