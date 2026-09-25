@@ -1709,6 +1709,43 @@ def _madc_verification_modal() -> dbc.Modal:
     )
 
 
+def _madc_download_progress_modal() -> dbc.Modal:
+    return dbc.Modal(
+        [
+            dbc.ModalHeader(dbc.ModalTitle("Preparing Your Download"), close_button=False),
+            dbc.ModalBody(
+                html.Div(
+                    [
+                        html.Span(className="download-progress-spinner", **{"aria-hidden": "true"}),
+                        html.Div(
+                            [
+                                html.P(
+                                    "Your results are being prepared for download. "
+                                    "This can take up to several minutes.",
+                                ),
+                                html.P(
+                                    html.Strong(
+                                        "Please do not refresh or close this page. Your download will start "
+                                        "automatically when it is ready."
+                                    ),
+                                    className="mb-0",
+                                ),
+                            ]
+                        ),
+                    ],
+                    className="download-progress",
+                    role="status",
+                    **{"aria-live": "polite"},
+                )
+            ),
+        ],
+        id="madc-download-progress-modal",
+        centered=True,
+        backdrop="static",
+        keyboard=False,
+    )
+
+
 def _existing_run_state_label(duplicate: dict) -> str:
     if duplicate.get("submission_status") == "declined":
         return "Declined by the person who ran it"
@@ -1995,6 +2032,7 @@ def _madc_tab() -> html.Div:
             _madc_submission_confirmation_modal(),
             _madc_verification_modal(),
             _madc_replace_run_modal(),
+            _madc_download_progress_modal(),
         ]
     )
 
@@ -2599,6 +2637,7 @@ def register_callbacks(app: Dash) -> None:
         Output("madc-download", "data"),
         Input("madc-submission-request", "data"),
         prevent_initial_call=True,
+        running=[(Output("madc-download-progress-modal", "is_open"), True, False)],
     )
     def submit_and_download_madc(request_data):
         if not isinstance(request_data, dict):

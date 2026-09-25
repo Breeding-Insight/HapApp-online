@@ -622,6 +622,38 @@ label,
   margin-bottom: 0;
 }
 
+.download-progress {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+}
+
+.download-progress p {
+  color: var(--text-main);
+}
+
+.download-progress-spinner {
+  animation: download-progress-spin 0.9s linear infinite;
+  border: 4px solid var(--panel-border);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  flex: none;
+  height: 40px;
+  width: 40px;
+}
+
+@keyframes download-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download-progress-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .replace-run-summary {
   display: grid;
   gap: 6px 16px;

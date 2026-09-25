@@ -184,6 +184,8 @@ class AuthTests(unittest.TestCase):
             self.assertIn(f"/app/assets/landing/{logo}", layout)
         self.assertIn("through University of Florida/IFAS. Formerly funded through Cornell University.", layout)
         self.assertIn("Need assistance? Contact", layout)
+        self.assertIn("madc-download-progress-modal", layout)
+        self.assertIn("Please do not refresh or close this page.", layout)
         self.assertIn("mailto:bi-science-team@ufl.edu", layout)
         self.assertEqual(stylesheet_response.status_code, 200)
         stylesheet = stylesheet_response.get_data(as_text=True)
