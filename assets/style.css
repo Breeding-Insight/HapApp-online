@@ -717,6 +717,49 @@ textarea:focus-visible,
   }
 }
 
+/* The Flatly theme draws alerts as white text on saturated colours, which fails WCAG AA
+   contrast (2.2:1 to 3.8:1). Use light backgrounds with dark text instead (8:1 or better). */
+.alert {
+  border: 1px solid !important;
+  border-left-width: 6px !important;
+}
+
+.alert a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.alert-danger {
+  background-color: #fdecea !important;
+  border-color: #b42318 !important;
+  color: #8a1c12 !important;
+}
+
+.alert-warning {
+  background-color: #fff8e1 !important;
+  border-color: #8a5a00 !important;
+  color: #5c3d00 !important;
+}
+
+.alert-info {
+  background-color: #e8f1fb !important;
+  border-color: #1b64dd !important;
+  color: #0b3d6e !important;
+}
+
+.alert-success {
+  background-color: #e6f4ea !important;
+  border-color: #21823b !important;
+  color: #14532d !important;
+}
+
+.alert-secondary {
+  background-color: #eef1f4 !important;
+  border-color: #5d6875 !important;
+  color: #33404d !important;
+}
+
 .nowrap {
   white-space: nowrap;
 }
