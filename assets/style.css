@@ -622,6 +622,24 @@ label,
   margin-bottom: 0;
 }
 
+.app-paused-banner {
+  background: var(--footer-bg);
+  border: 2px solid #ffffff;
+  border-radius: 8px;
+  bottom: 24px;
+  box-shadow: 0 8px 24px rgba(12, 50, 55, 0.25);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  left: 50%;
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 14px 20px;
+  position: fixed;
+  text-align: center;
+  transform: translateX(-50%);
+  z-index: 2000;
+}
+
 .download-progress {
   align-items: flex-start;
   display: flex;

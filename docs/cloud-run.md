@@ -84,7 +84,7 @@ database name or service-account permission is incorrect.
 For the current polling and background-processing implementation, use:
 
 - container port: `8080`
-- minimum instances: `1`
+- minimum instances: `0` (scale to zero when idle)
 - maximum instances: `1`
 - instance-based CPU allocation
 - session affinity: enabled
@@ -106,7 +106,7 @@ gcloud run deploy hapapp-online \
   --allow-unauthenticated \
   --service-account=hapapp-cloud-run@PROJECT_ID.iam.gserviceaccount.com \
   --port=8080 \
-  --min=1 \
+  --min=0 \
   --max=1 \
   --concurrency=8 \
   --cpu=2 \
@@ -134,7 +134,16 @@ environment, secret, and scaling configuration.
 
 Firestore makes authorization, duplicate detection, publication claims, and recovery
 durable and safe across instances. The run registry and active workflow files are
-still process-local. Keeping exactly one warm instance with CPU always allocated makes
-the current workflow usable on Cloud Run, but it does not make in-flight preprocessing
-survive a platform restart. Do not raise maximum instances above one until run files
-move to Cloud Storage and processing is dispatched to durable Cloud Run Jobs.
+still process-local, so they exist only while the single instance is running.
+
+With minimum instances at `0`, Cloud Run scales the service to zero once no requests
+arrive, keeping an idle instance for up to 15 minutes. While a run is shown, the app
+page polls the server once a second, which keeps the instance alive for the run,
+review, and download. After 5 minutes without user activity the page stops polling
+(`assets/inactivity-pause.js`), so a forgotten tab cannot keep the service running.
+Runs normally finish in well under a minute; results that are not downloaded before
+the instance scales down are lost, and the file can be processed again using the
+replace-run confirmation.
+
+Do not raise maximum instances above one until run files move to Cloud Storage and
+processing is dispatched to durable Cloud Run Jobs.
