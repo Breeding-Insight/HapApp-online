@@ -1914,7 +1914,18 @@ def _madc_tab() -> html.Div:
                                                     id="madc-panel-value",
                                                     className="identified-panel-value identified-panel-value--empty",
                                                 ),
-                                                type="circle",
+                                                custom_spinner=html.Span(
+                                                    [
+                                                        html.Span(
+                                                            className="panel-spinner", **{"aria-hidden": "true"}
+                                                        ),
+                                                        html.Span(
+                                                            "Identifying species panel...",
+                                                            className="app-screen-reader-title",
+                                                        ),
+                                                    ],
+                                                    role="status",
+                                                ),
                                             ),
                                             className="panel-identification-loading",
                                         ),

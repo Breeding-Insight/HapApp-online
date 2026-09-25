@@ -694,6 +694,16 @@ textarea:focus-visible,
   width: 40px;
 }
 
+.panel-spinner {
+  animation: download-progress-spin 0.9s linear infinite;
+  border: 3px solid var(--panel-border);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  display: inline-block;
+  height: 22px;
+  width: 22px;
+}
+
 @keyframes download-progress-spin {
   to {
     transform: rotate(360deg);
@@ -701,7 +711,8 @@ textarea:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .download-progress-spinner {
+  .download-progress-spinner,
+  .panel-spinner {
     animation-duration: 2.4s;
   }
 }
