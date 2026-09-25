@@ -1,11 +1,16 @@
 :root {
-  --accent: #22736f;
-  --accent-dark: #1c5f5b;
-  --panel-border: #bcc6d0;
+  --accent: #066a73;
+  --accent-dark: #054f56;
+  --accent-green: #21823b;
+  --accent-green-dark: #17652c;
+  --accent-cyan: #1fb1d6;
+  --panel-border: #d3e0e1;
   --panel-bg: #ffffff;
-  --page-bg: #f5f6f7;
-  --text-main: #17212b;
-  --text-muted: #5d6875;
+  --page-bg: #f4f8f8;
+  --text-main: #1b2733;
+  --text-muted: #4a5663;
+  --footer-bg: #0c3237;
+  --footer-muted: #c9dcdd;
   --terminal-bg: #11161b;
   --terminal-text: #d6f6df;
   --bs-border-radius: 4px;
@@ -22,7 +27,7 @@ body {
 .app-shell {
   margin: 0 auto;
   max-width: 1500px;
-  padding: 16px 26px 22px;
+  padding: 0 26px 22px;
 }
 
 .app-header {
@@ -30,24 +35,46 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 14px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 1px 2px rgba(12, 50, 55, 0.06), 0 6px 20px rgba(12, 50, 55, 0.05);
+  margin-bottom: 18px;
+  min-height: 76px;
+  padding: 12px 18px;
 }
 
 .app-title-line {
   align-items: center;
   display: flex;
-  gap: 9px;
+  gap: 12px;
 }
 
-.app-title h1 {
-  font-size: 25px;
-  font-weight: 700;
-  margin: 0;
+.app-screen-reader-title {
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.app-brand-link {
+  display: inline-flex;
+  flex: none;
+}
+
+.app-hapapp-logo {
+  display: block;
+  height: 42px;
+  width: auto;
 }
 
 .app-version {
-  background: #edf2f7;
-  border: 1px solid #d6dee8;
+  background: #e6f2f2;
+  border: 1px solid var(--panel-border);
   border-radius: 4px;
   color: #415163;
   font-size: 12px;
@@ -59,7 +86,7 @@ body {
 .app-title p {
   color: var(--text-muted);
   font-size: 13px;
-  margin: 3px 0 0;
+  margin: 5px 0 0;
 }
 
 .vendor-path {
@@ -395,23 +422,6 @@ label,
 }
 
 .btn-primary {
-  --bs-btn-active-bg: #1c2a36;
-  --bs-btn-active-border-color: #1c2a36;
-  --bs-btn-bg: #263746;
-  --bs-btn-border-color: #263746;
-  --bs-btn-hover-bg: #1c2a36;
-  --bs-btn-hover-border-color: #1c2a36;
-  background: #263746 !important;
-  border-color: #263746 !important;
-}
-
-.btn-primary:hover,
-.btn-primary:focus {
-  background: #1c2a36 !important;
-  border-color: #1c2a36 !important;
-}
-
-.btn-success {
   --bs-btn-active-bg: var(--accent-dark);
   --bs-btn-active-border-color: var(--accent-dark);
   --bs-btn-bg: var(--accent);
@@ -422,10 +432,27 @@ label,
   border-color: var(--accent) !important;
 }
 
-.btn-success:hover,
-.btn-success:focus {
+.btn-primary:hover,
+.btn-primary:focus {
   background: var(--accent-dark) !important;
   border-color: var(--accent-dark) !important;
+}
+
+.btn-success {
+  --bs-btn-active-bg: var(--accent-green-dark);
+  --bs-btn-active-border-color: var(--accent-green-dark);
+  --bs-btn-bg: var(--accent-green);
+  --bs-btn-border-color: var(--accent-green);
+  --bs-btn-hover-bg: var(--accent-green-dark);
+  --bs-btn-hover-border-color: var(--accent-green-dark);
+  background: var(--accent-green) !important;
+  border-color: var(--accent-green) !important;
+}
+
+.btn-success:hover,
+.btn-success:focus {
+  background: var(--accent-green-dark) !important;
+  border-color: var(--accent-green-dark) !important;
 }
 
 .result-select {
@@ -730,15 +757,89 @@ label,
   font-weight: 700;
 }
 
+.app-footer {
+  background: var(--footer-bg);
+  border-radius: 10px;
+  color: #ffffff;
+  margin-top: 26px;
+  padding: 34px 28px 22px;
+}
+
+.app-partner-logos {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 42px;
+  justify-content: center;
+  list-style: none;
+  margin: 0 0 26px;
+  padding: 0;
+}
+
+.app-footer-logo img {
+  display: block;
+  height: 40px;
+  max-width: 190px;
+  object-fit: contain;
+  width: auto;
+}
+
+.app-footer-logo-bi img {
+  height: 52px;
+}
+
+.app-footer-logo-ifas img {
+  filter: brightness(0) invert(1);
+}
+
+.app-funding {
+  color: #ffffff;
+  font-size: 14px;
+  margin: 0 auto 22px;
+  max-width: 70ch;
+  text-align: center;
+}
+
+.app-footer-bottom {
+  align-items: center;
+  border-top: 1px solid rgba(201, 220, 221, 0.35);
+  color: var(--footer-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 12px 24px;
+  justify-content: space-between;
+  padding-top: 18px;
+}
+
+.app-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.app-footer a {
+  color: #ffffff;
+  text-underline-offset: 3px;
+}
+
+.app-footer a:hover {
+  color: var(--footer-muted);
+}
+
 @media (max-width: 991px) {
   .app-shell {
-    padding: 12px;
+    padding: 0 12px 12px;
   }
 
   .app-header,
   .preview-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .app-title p {
+    margin-left: 0;
   }
 
   .vendor-path {
@@ -755,5 +856,38 @@ label,
 
   .terminal {
     height: 360px;
+  }
+}
+
+@media (max-width: 575px) {
+  .app-header {
+    padding: 14px;
+  }
+
+  .app-title-line {
+    flex-wrap: wrap;
+  }
+
+  .app-hapapp-logo {
+    height: 38px;
+  }
+
+  .app-footer {
+    border-radius: 8px;
+    padding: 30px 18px 20px;
+  }
+
+  .app-footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .app-footer-logo img {
+    height: 34px;
+    max-width: 155px;
+  }
+
+  .app-footer-logo-bi img {
+    height: 44px;
   }
 }

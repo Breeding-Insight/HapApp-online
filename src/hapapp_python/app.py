@@ -2012,7 +2012,7 @@ def create_app() -> Dash:
         external_stylesheets=[dbc.themes.FLATLY],
         assets_folder=str(PROJECT_ROOT / "assets"),
         suppress_callback_exceptions=True,
-        title=APP_NAME,
+        title=f"{APP_NAME} | Breeding Insight",
     )
     du.configure_upload(app, str(UPLOAD_BASE))
     app.index_string = f"""
@@ -2022,6 +2022,7 @@ def create_app() -> Dash:
         {{%metas%}}
         <title>{{%title%}}</title>
         {{%favicon%}}
+        <link rel="icon" type="image/png" href="/app/assets/landing/hapapp-icon.png">
         {{%css%}}
       </head>
       <body>
@@ -2050,7 +2051,16 @@ def create_app() -> Dash:
                         [
                             html.Div(
                                 [
-                                    html.H1(APP_NAME),
+                                    html.H1(APP_NAME, className="app-screen-reader-title"),
+                                    html.A(
+                                        html.Img(
+                                            src="/app/assets/landing/hapapp-logo.png",
+                                            alt="HapApp",
+                                            className="app-hapapp-logo",
+                                        ),
+                                        href="/",
+                                        className="app-brand-link",
+                                    ),
                                     html.Span(f"v{__version__}", className="app-version"),
                                 ],
                                 className="app-title-line",
@@ -2071,6 +2081,73 @@ def create_app() -> Dash:
                 className="app-header",
             ),
             _madc_tab(),
+            html.Footer(
+                [
+                    html.Ul(
+                        [
+                            html.Li(
+                                html.A(
+                                    html.Img(
+                                        src="/app/assets/landing/breeding-insight-logo-white.png",
+                                        alt="Breeding Insight",
+                                    ),
+                                    href="https://breedinginsight.org/",
+                                ),
+                                className="app-footer-logo app-footer-logo-bi",
+                            ),
+                            html.Li(
+                                html.Img(
+                                    src="/app/assets/landing/usda-ars-logo-white.png",
+                                    alt="United States Department of Agriculture Agricultural Research Service",
+                                ),
+                                className="app-footer-logo",
+                            ),
+                            html.Li(
+                                html.Img(
+                                    src="/app/assets/landing/uf-ifas-logo.svg",
+                                    alt="University of Florida Institute of Food and Agricultural Sciences",
+                                ),
+                                className="app-footer-logo app-footer-logo-ifas",
+                            ),
+                            html.Li(
+                                html.Img(
+                                    src="/app/assets/landing/cornell-logo-white.png",
+                                    alt="Cornell University",
+                                ),
+                                className="app-footer-logo",
+                            ),
+                        ],
+                        className="app-partner-logos",
+                    ),
+                    html.P(
+                        "Breeding Insight is funded by the U.S. Department of Agriculture (USDA) "
+                        "Agricultural Research Service (ARS) through University of Florida/IFAS. "
+                        "Formerly funded through Cornell University.",
+                        className="app-funding",
+                    ),
+                    html.Div(
+                        [
+                            html.Span(
+                                f"© {datetime.now(timezone.utc).year} Breeding Insight · HapApp v{__version__}"
+                            ),
+                            html.Div(
+                                [
+                                    html.A("Public landing page", href="/"),
+                                    html.A(
+                                        "Source code",
+                                        href="https://github.com/Breeding-Insight/HapApp-online",
+                                        target="_blank",
+                                        rel="noopener noreferrer",
+                                    ),
+                                ],
+                                className="app-footer-links",
+                            ),
+                        ],
+                        className="app-footer-bottom",
+                    ),
+                ],
+                className="app-footer",
+            ),
         ],
         fluid=True,
         className="app-shell",

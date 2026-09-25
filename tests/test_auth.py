@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from unittest.mock import Mock, patch
@@ -8,7 +9,7 @@ from flask import Flask
 
 from hapapp_python import config
 from hapapp_python.auth import auth_bp, get_current_user, lookup_user
-from hapapp_python.app import create_server
+from hapapp_python.app import create_app, create_server
 
 
 class AuthTests(unittest.TestCase):
@@ -156,6 +157,35 @@ class AuthTests(unittest.TestCase):
             "tools/bigr.png",
         ):
             self.assertIn(f"/app/assets/landing/{logo}", body)
+
+    def test_authenticated_app_uses_landing_page_brand_assets(self) -> None:
+        with patch.object(config, "LOCAL_AUTH_BYPASS", True):
+            app = create_app()
+            client = app.server.test_client()
+            index_response = client.get("/app/")
+            layout_response = client.get("/app/_dash-layout")
+            stylesheet_response = client.get("/app/assets/style.css")
+
+        self.assertEqual(index_response.status_code, 200)
+        self.assertIn(
+            '/app/assets/landing/hapapp-icon.png',
+            index_response.get_data(as_text=True),
+        )
+        self.assertEqual(layout_response.status_code, 200)
+        layout = json.dumps(layout_response.get_json())
+        for logo in (
+            "hapapp-logo.png",
+            "breeding-insight-logo-white.png",
+            "usda-ars-logo-white.png",
+            "uf-ifas-logo.svg",
+            "cornell-logo-white.png",
+        ):
+            self.assertIn(f"/app/assets/landing/{logo}", layout)
+        self.assertIn("through University of Florida/IFAS. Formerly funded through Cornell University.", layout)
+        self.assertEqual(stylesheet_response.status_code, 200)
+        stylesheet = stylesheet_response.get_data(as_text=True)
+        self.assertIn("--accent: #066a73", stylesheet)
+        self.assertIn("--footer-bg: #0c3237", stylesheet)
 
     def test_local_auth_bypass_provides_stable_identity(self) -> None:
         server = create_server()
