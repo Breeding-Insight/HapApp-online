@@ -1014,8 +1014,6 @@ def _submission_review_alert(state: RunState) -> dbc.Alert:
         children.append(html.P(state.review_feedback, className="mb-0"))
     if state.pull_request_url:
         children.append(html.A("View pull request", href=state.pull_request_url, target="_blank"))
-    if state.incorporation_commit_url:
-        children.append(html.A("View incorporation commit", href=state.incorporation_commit_url, target="_blank"))
     return dbc.Alert(children, color=color, className="mb-3")
 
 
