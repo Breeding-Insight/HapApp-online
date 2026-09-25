@@ -158,6 +158,8 @@ class AuthTests(unittest.TestCase):
             "tools/bigr.png",
         ):
             self.assertIn(f"/app/assets/landing/{logo}", body)
+        self.assertIn('<a href="https://ifas.ufl.edu/">', body)
+        self.assertIn("Last updated", body)
 
     def test_authenticated_app_uses_landing_page_brand_assets(self) -> None:
         with patch.object(config, "LOCAL_AUTH_BYPASS", True):
@@ -168,6 +170,7 @@ class AuthTests(unittest.TestCase):
             stylesheet_response = client.get("/app/assets/style.css")
 
         self.assertEqual(index_response.status_code, 200)
+        self.assertIn('<html lang="en">', index_response.get_data(as_text=True))
         self.assertIn(
             '/app/assets/landing/hapapp-icon.png',
             index_response.get_data(as_text=True),
@@ -186,6 +189,9 @@ class AuthTests(unittest.TestCase):
         self.assertIn("Need assistance? Contact", layout)
         self.assertIn("madc-download-progress-modal", layout)
         self.assertIn("Please do not refresh or close this page.", layout)
+        self.assertIn("https://ifas.ufl.edu/", layout)
+        self.assertIn("Last updated", layout)
+        self.assertIn("madc-replace-modal-title", layout)
         self.assertIn("mailto:bi-science-team@ufl.edu", layout)
         self.assertEqual(stylesheet_response.status_code, 200)
         stylesheet = stylesheet_response.get_data(as_text=True)

@@ -415,7 +415,7 @@
         <ul class="partner-logos" aria-label="Partner organizations">
           <li class="logo-bi"><img src="{{ asset_base }}/breeding-insight-logo-white.png" width="154" height="56" alt="Breeding Insight"></li>
           <li><img src="{{ asset_base }}/usda-ars-logo-white.png" width="139" height="44" alt="USDA Agricultural Research Service"></li>
-          <li class="logo-ifas"><img src="{{ asset_base }}/uf-ifas-logo.svg" width="132" height="44" alt="University of Florida Institute of Food and Agricultural Sciences (UF/IFAS)"></li>
+          <li class="logo-ifas"><a href="{{ uf_ifas_url }}"><img src="{{ asset_base }}/uf-ifas-logo.svg" width="132" height="44" alt="University of Florida Institute of Food and Agricultural Sciences (UF/IFAS)"></a></li>
           <li><img src="{{ asset_base }}/cornell-logo-white.png" width="173" height="44" alt="Cornell University"></li>
         </ul>
         <p class="funding">
@@ -423,7 +423,7 @@
           through University of Florida/IFAS. Formerly funded through Cornell University.
         </p>
         <div class="footer-bottom">
-          <p>&copy; {{ year }} Breeding Insight &middot; HapApp v{{ version }}</p>
+          <p>&copy; {{ year }} Breeding Insight &middot; HapApp v{{ version }} &middot; Last updated {{ last_updated }}</p>
           <ul>
             <li><a href="https://breedinginsight.org/about-bi/">About Breeding Insight</a></li>
             <li><a href="https://breedinginsight.org/contact-us/">Contact us</a></li>

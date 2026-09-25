@@ -16,7 +16,7 @@ import uuid
 import webbrowser
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from hapapp_python.env import load_env
@@ -106,6 +106,9 @@ MADC_LOG_FILENAME = "hapapp_madc_workflow.log"
 MADC_RUN_METADATA_FILENAME = "hapapp_madc_run_metadata.json"
 MADC_GITHUB_METADATA_FILENAME = "hapapp_github_contribution_metadata.json"
 APP_NAME = "HapApp"
+UF_IFAS_URL = "https://ifas.ufl.edu/"
+# Shown as "Last updated" on the landing and app pages; update when page content changes.
+SITE_LAST_UPDATED = date(2026, 9, 25)
 LOGGER = logging.getLogger(__name__)
 TERMINAL_AUTO_SCROLL_SCRIPT = """
 window.dash_clientside = window.dash_clientside || {};
@@ -1533,7 +1536,7 @@ def _uploader_box(component_id: str, label: str, filetypes: list[str] | None = N
 def _madc_results_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Processed Files"), close_button=False),
+            dbc.ModalHeader(dbc.ModalTitle("Processed Files", id="madc-results-modal-title"), close_button=False),
             dbc.ModalBody(
                 [
                     html.Div(id="madc-results-summary"),
@@ -1602,6 +1605,7 @@ def _madc_results_modal() -> dbc.Modal:
             ),
         ],
         id="madc-results-modal",
+        labelledby="madc-results-modal-title",
         centered=True,
         size="lg",
         backdrop="static",
@@ -1612,7 +1616,7 @@ def _madc_results_modal() -> dbc.Modal:
 def _madc_submission_confirmation_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Confirm Sharing and Download"), close_button=False),
+            dbc.ModalHeader(dbc.ModalTitle("Confirm Sharing and Download", id="madc-submission-confirmation-modal-title"), close_button=False),
             dbc.ModalBody(
                 [
                     html.P(
@@ -1655,6 +1659,7 @@ def _madc_submission_confirmation_modal() -> dbc.Modal:
             ),
         ],
         id="madc-submission-confirmation-modal",
+        labelledby="madc-submission-confirmation-modal-title",
         centered=True,
         size="lg",
         backdrop="static",
@@ -1699,11 +1704,12 @@ def _madc_verification_details(exc: MADCValidationError) -> list:
 def _madc_verification_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("MADC Verification Failed"), close_button=False),
+            dbc.ModalHeader(dbc.ModalTitle("MADC Verification Failed", id="madc-verification-modal-title"), close_button=False),
             dbc.ModalBody(html.Div(id="madc-verification-details", className="verification-details")),
             dbc.ModalFooter(dbc.Button("Close", id="madc-verification-close", color="secondary", outline=True)),
         ],
         id="madc-verification-modal",
+        labelledby="madc-verification-modal-title",
         centered=True,
         size="lg",
     )
@@ -1712,7 +1718,7 @@ def _madc_verification_modal() -> dbc.Modal:
 def _madc_download_progress_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Preparing Your Download"), close_button=False),
+            dbc.ModalHeader(dbc.ModalTitle("Preparing Your Download", id="madc-download-progress-modal-title"), close_button=False),
             dbc.ModalBody(
                 html.Div(
                     [
@@ -1740,6 +1746,7 @@ def _madc_download_progress_modal() -> dbc.Modal:
             ),
         ],
         id="madc-download-progress-modal",
+        labelledby="madc-download-progress-modal-title",
         centered=True,
         backdrop="static",
         keyboard=False,
@@ -1759,6 +1766,10 @@ def _existing_run_state_label(duplicate: dict) -> str:
     if live_status == "completed" or duplicate.get("output_checksums_json"):
         return "Finished; results not yet shared with Breeding Insight"
     return "Processing, or stopped before it finished"
+
+
+def _format_site_date(value: date) -> str:
+    return f"{value:%B} {value.day}, {value.year}"
 
 
 def _format_run_started(value: object) -> str:
@@ -1803,7 +1814,7 @@ def _madc_replace_run_details(duplicate: dict) -> list:
 def _madc_replace_run_modal() -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Replace Existing Run?"), close_button=False),
+            dbc.ModalHeader(dbc.ModalTitle("Replace Existing Run?", id="madc-replace-modal-title"), close_button=False),
             dbc.ModalBody(html.Div(id="madc-replace-details")),
             dbc.ModalFooter(
                 [
@@ -1813,6 +1824,7 @@ def _madc_replace_run_modal() -> dbc.Modal:
             ),
         ],
         id="madc-replace-modal",
+        labelledby="madc-replace-modal-title",
         centered=True,
         size="lg",
         backdrop="static",
@@ -1988,7 +2000,7 @@ def _madc_tab() -> html.Div:
                                 html.Div(
                                     [
                                         html.H3("Terminal"),
-                                        html.Span(id="madc-status", className="status-pill"),
+                                        html.Span(id="madc-status", className="status-pill", role="status", **{"aria-live": "polite"}),
                                     ],
                                     className="terminal-header",
                                 ),
@@ -2097,6 +2109,8 @@ def _landing_page() -> str:
         asset_base="/app/assets/landing",
         login_url="/auth/login",
         tools=LANDING_TOOLS,
+        uf_ifas_url=UF_IFAS_URL,
+        last_updated=_format_site_date(SITE_LAST_UPDATED),
         version=__version__,
         year=datetime.now(timezone.utc).year,
     )
@@ -2162,7 +2176,7 @@ def create_app() -> Dash:
     du.configure_upload(app, str(UPLOAD_BASE))
     app.index_string = f"""
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         {{%metas%}}
         <title>{{%title%}}</title>
@@ -2172,12 +2186,12 @@ def create_app() -> Dash:
       </head>
       <body>
         {{%app_entry%}}
-        <footer>
+        <div>
           <script>{TERMINAL_AUTO_SCROLL_SCRIPT}</script>
           {{%config%}}
           {{%scripts%}}
           {{%renderer%}}
-        </footer>
+        </div>
       </body>
     </html>
     """
@@ -2191,7 +2205,7 @@ def create_app() -> Dash:
             dcc.Download(id="madc-download"),
             dcc.Store(id="madc-submission-request"),
             dcc.Store(id="madc-terminal-scroll"),
-            html.Div(
+            html.Header(
                 [
                     html.Div(
                         [
@@ -2226,7 +2240,7 @@ def create_app() -> Dash:
                 ],
                 className="app-header",
             ),
-            _madc_tab(),
+            html.Main(_madc_tab(), id="main"),
             html.Footer(
                 [
                     html.Ul(
@@ -2249,9 +2263,12 @@ def create_app() -> Dash:
                                 className="app-footer-logo",
                             ),
                             html.Li(
-                                html.Img(
-                                    src="/app/assets/landing/uf-ifas-logo.svg",
-                                    alt="University of Florida Institute of Food and Agricultural Sciences",
+                                html.A(
+                                    html.Img(
+                                        src="/app/assets/landing/uf-ifas-logo.svg",
+                                        alt="University of Florida Institute of Food and Agricultural Sciences",
+                                    ),
+                                    href=UF_IFAS_URL,
                                 ),
                                 className="app-footer-logo app-footer-logo-ifas",
                             ),
@@ -2275,7 +2292,8 @@ def create_app() -> Dash:
                     html.Div(
                         [
                             html.Span(
-                                f"© {datetime.now(timezone.utc).year} Breeding Insight · HapApp v{__version__}"
+                                f"© {datetime.now(timezone.utc).year} Breeding Insight · HapApp v{__version__} · "
+                                f"Last updated {_format_site_date(SITE_LAST_UPDATED)}"
                             ),
                             html.Div(
                                 [

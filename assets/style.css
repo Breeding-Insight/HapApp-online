@@ -1,4 +1,5 @@
 :root {
+  --focus-ring: #1b64dd;
   --accent: #066a73;
   --accent-dark: #054f56;
   --accent-green: #21823b;
@@ -194,8 +195,8 @@ body {
 
 .upload-wrap > div:focus-within {
   border-color: var(--accent-dark) !important;
-  outline: 2px solid rgba(34, 115, 111, 0.18);
-  outline-offset: 1px;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .upload-wrap > .dash-uploader-complete {
@@ -620,6 +621,22 @@ label,
 
 .verification-list li:last-child {
   margin-bottom: 0;
+}
+
+/* Buttons drop Bootstrap's box-shadow focus ring, so draw a visible outline for keyboard users. */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus-ring) !important;
+  outline-offset: 2px;
+}
+
+.app-footer a:focus-visible {
+  outline-color: #ffffff !important;
 }
 
 .app-paused-banner {
