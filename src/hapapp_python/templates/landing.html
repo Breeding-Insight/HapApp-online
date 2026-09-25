@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="HapApp processes DArTag MADC genotyping reports and shares new microhaplotypes with Breeding Insight's standardized microhaplotype databases.">
+    <meta name="description" content="HapApp processes raw DArTag MADC reports against Breeding Insight's public microhaplotype databases and assigns fixed allele IDs ready for downstream analysis.">
     <title>HapApp | Breeding Insight</title>
     <link rel="icon" type="image/png" href="{{ asset_base }}/hapapp-icon.png">
     <style>
@@ -93,13 +93,14 @@
       .hero .wrap { display: grid; grid-template-columns: 1fr auto; gap: 48px; align-items: center; padding-block: 72px; }
       .hero-logo { width: 240px; height: auto; }
       .eyebrow {
-        display: inline-block; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em;
-        text-transform: uppercase; color: var(--primary-strong); margin-bottom: 14px;
+        display: inline-block; font-size: 1rem; font-weight: 700;
+        color: var(--primary-strong); margin-bottom: 14px;
       }
       .hero h1 { font-size: clamp(2rem, 1.3rem + 2.6vw, 3rem); letter-spacing: -0.02em; margin-bottom: 18px; }
       .hero .lead { font-size: 1.125rem; color: var(--ink-muted); max-width: 60ch; margin-bottom: 28px; }
       .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
       .access-note { font-size: 0.9375rem; color: var(--ink-muted); max-width: 60ch; }
+      .nowrap { white-space: nowrap; }
 
 
       /* Sections */
@@ -120,9 +121,15 @@
       .card p { color: var(--ink-muted); font-size: 0.9625rem; }
 
       .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
-      .prose p + p { margin-top: 14px; }
-      .prose p { color: var(--ink-muted); }
-      .prose strong { color: var(--ink); }
+      .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+      .steps li { position: relative; padding-left: 48px; color: var(--ink-muted); counter-increment: step; }
+      .steps li + li { margin-top: 18px; }
+      .steps li::before {
+        content: counter(step); position: absolute; left: 0; top: 0; width: 32px; height: 32px;
+        border-radius: 50%; background: var(--surface-tint); color: var(--primary-strong);
+        border: 2px solid var(--primary); font-weight: 700; display: grid; place-items: center;
+      }
+      .steps strong { display: block; color: var(--ink); }
 
       .citation {
         border-left: 4px solid var(--primary); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0;
@@ -229,10 +236,9 @@
         </div>
         <nav class="site-nav" aria-label="Page sections">
           <ul>
-            <li><a href="#why">Why share</a></li>
             <li><a href="#how">How it works</a></li>
-            <li><a href="#database">The database</a></li>
-            <li><a href="#tools">Downstream tools</a></li>
+            <li><a href="#database">Microhaplotype Database</a></li>
+            <li><a href="#tools">Genomic Analysis</a></li>
           </ul>
         </nav>
       </div>
@@ -242,68 +248,75 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="wrap">
           <div>
-            <span class="eyebrow">Breeding Insight microhaplotype databases</span>
-            <h1 id="hero-title">Turn DArTag genotyping reports into shared, standardized microhaplotype data</h1>
+            <span class="eyebrow">Breeding Insight microhaplotypeDB</span>
+            <h1 id="hero-title">Process your DArTag reports against the public Breeding Insight microhaplotype database reference</h1>
             <p class="lead">
-              HapApp processes raw DArTag Missing Allele Discovery Count (MADC) reports, assigns every
-              allele a fixed microhaplotype ID, and shares newly discovered microhaplotypes with the
-              public Breeding Insight microhaplotype database for your species.
+              HapApp performs QC and filters raw DArTag Missing Allele Discovery Count (MADC) reports,
+              assigns every allele a fixed microhaplotype ID from the public Breeding Insight microhaplotype
+              database for your species, and adds any newly discovered microhaplotypes to it.
             </p>
             <div class="hero-actions">
               <a class="btn btn-primary" href="{{ login_url }}">
                 <svg class="orcid-icon" aria-hidden="true" focusable="false"><use href="#icon-orcid"/></svg>
                 Sign in with ORCID iD
               </a>
-              <a class="btn btn-secondary" href="#why">Learn why it matters</a>
+              <a class="btn btn-secondary" href="#how">See how it works</a>
             </div>
             <p class="access-note">
               Access is limited to registered users. To request access, please email
-              <a href="mailto:bi-science-team@ufl.edu?subject=HapApp%20access%20request">bi-science-team@ufl.edu</a>.
+              <a class="nowrap" href="mailto:bi-science-team@ufl.edu?subject=HapApp%20access%20request">bi-science-team@ufl.edu</a>.
             </p>
           </div>
           <img class="hero-logo" src="{{ asset_base }}/hapapp-icon.png" width="240" height="240" alt="">
         </div>
       </section>
 
-      <section class="band" id="why" aria-labelledby="why-title">
-        <div class="wrap">
-          <div class="section-head" style="margin-bottom:0">
-            <h2 id="why-title">Why a shared microhaplotype database?</h2>
-            <p>
-              DArTag reports label alleles differently from one genotyping project to the next, so the same
-              microhaplotype can carry different names in different datasets. Without a common reference,
-              results from separate breeding programs cannot be reliably combined or compared. Every report
-              shared through HapApp strengthens a single, consistent reference for the whole community.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section class="band alt" id="how" aria-labelledby="how-title">
+      <section class="band" id="how" aria-labelledby="how-title">
         <div class="wrap split">
           <div class="section-head" style="margin-bottom:0">
             <h2 id="how-title">How HapApp works</h2>
             <p>
-              HapApp is a web interface to the same Breeding Insight pipeline used to build the published
-              databases. You do not need to install bioinformatics software or use the command line.
+              HapApp runs the same Breeding Insight pipeline that built the published databases, so your report
+              is processed the same way the reference was. There's no software to install and no command line.
             </p>
           </div>
-          <div class="prose">
+          <ol class="steps">
+            <li>
+              <strong>File checks.</strong>
+              HapApp confirms that your upload is a raw, unprocessed DArTag MADC report and that its markers
+              match a supported species panel.
+            </li>
+            <li>
+              <strong>Quality control.</strong>
+              Marker IDs are converted to a standard chromosome-and-position format. Microhaplotypes are kept
+              only if they appear in at least 10 samples or 5% of samples (whichever is smaller) with at least
+              2 reads each, which removes rare sequencing artifacts.
+            </li>
+            <li>
+              <strong>Fixed IDs.</strong>
+              Each microhaplotype is compared with the species database using BLAST. Known microhaplotypes keep
+              their established IDs, new ones get new unique IDs, and duplicate sequences are merged so each has
+              exactly one ID.
+            </li>
+            <li>
+              <strong>Download your results.</strong>
+              You receive a processed MADC with fixed allele IDs, ready for downstream analysis. New
+              microhaplotypes are added to the database, and your processed report, metadata and workflow log
+              are shared with Breeding Insight for review.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="band alt" id="why" aria-labelledby="why-title">
+        <div class="wrap">
+          <div class="section-head" style="margin-bottom:0">
+            <h2 id="why-title">Why process against a public reference?</h2>
             <p>
-              <strong>Automatic panel detection.</strong> After you upload a raw MADC report, HapApp matches
-              its marker CloneIDs against the supported species panels and loads the current version of that
-              species' microhaplotype database.
-            </p>
-            <p>
-              <strong>Quality control and allele assignment.</strong> The report is checked and filtered, and each
-              allele is compared with the database. Known microhaplotypes receive their established IDs, and
-              novel ones are assigned new, unique IDs.
-            </p>
-            <p>
-              <strong>Review, then share.</strong> You download a processed MADC with fixed allele IDs for your
-              own analyses. When you confirm the submission, the new microhaplotypes and your submission
-              metadata are committed as a new version of the species database and recorded for Breeding
-              Insight review.
+              DArTag reports name alleles project by project, so the same microhaplotype can carry different
+              labels in different orders, even within your own program. Processing against the public database
+              gives each microhaplotype one permanent ID. You can combine data across years and projects,
+              compare your germplasm with other programs, and move straight into downstream analysis.
             </p>
           </div>
         </div>
@@ -313,11 +326,12 @@
         <div class="wrap split">
           <div>
             <div class="section-head" style="margin-bottom:0">
-              <h2 id="database-title">The database you are sharing with</h2>
+              <h2 id="database-title">Breeding Insight's Microhaplotype Database</h2>
               <p>
                 Breeding Insight maintains standardized, species-specific microhaplotype databases built from
-                DArTag data shared by USDA-ARS and university breeding programs. The framework and the
-                initial databases are described in a peer-reviewed publication.
+                DArTag data from USDA-ARS and university breeding programs. Each processed report makes the
+                reference more complete for everyone who uses it. The framework and the initial databases are
+                described in a peer-reviewed publication.
               </p>
             </div>
             <ul class="crops" aria-label="Species covered in the publication">
@@ -382,8 +396,8 @@
         <div class="wrap">
           <div class="section-head">
             <p>
-              Sign in with your ORCID iD to upload a MADC report. Your ORCID iD and metadata are recorded with
-              each submission so the data you share is credited to you.
+              Sign in with your ORCID iD to process a MADC report. Your ORCID iD and metadata are recorded with
+              each submission, so any new microhaplotypes from your data are credited to you.
             </p>
           </div>
           <div class="hero-actions">
