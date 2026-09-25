@@ -112,16 +112,28 @@ def callback():
         response.raise_for_status()
         token_json = response.json()
     except Exception as exc:  # noqa: BLE001 - shown on auth error route.
-        return f"Failed to exchange token with ORCID: {exc}", 500
+        return (
+            f"Failed to exchange token with ORCID: {exc}. Please try again. "
+            f"If the problem continues, contact {config.BI_SCIENCE_TEAM_CONTACT}.",
+            500,
+        )
 
     orcid_id = token_json.get("orcid")
     display_name = token_json.get("name", "")
     if not orcid_id:
-        return "Could not retrieve ORCID iD.", 500
+        return (
+            "Could not retrieve ORCID iD. Please try again. "
+            f"If the problem continues, contact {config.BI_SCIENCE_TEAM_CONTACT}.",
+            500,
+        )
 
     user = lookup_user(orcid_id)
     if not user:
-        return "Your ORCID iD is not authorized to access this application. Please contact an administrator.", 403
+        return (
+            "Your ORCID iD is not authorized to access HapApp. "
+            f"To request access, contact {config.BI_SCIENCE_TEAM_CONTACT}.",
+            403,
+        )
 
     profile = refresh_profile(orcid_id)
     _set_user_session(orcid_id, user, (profile or {}).get("display_name") or display_name)

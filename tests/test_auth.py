@@ -86,6 +86,7 @@ class AuthTests(unittest.TestCase):
             response = client.get("/auth/callback?state=state&code=abc")
 
         self.assertEqual(response.status_code, 403)
+        self.assertIn(b"contact the Breeding Insight Science team at bi-science-team@ufl.edu", response.data)
         self.assertEqual(
             post.call_args.kwargs["data"]["redirect_uri"],
             "https://hapapp.example/auth/callback",
@@ -182,6 +183,8 @@ class AuthTests(unittest.TestCase):
         ):
             self.assertIn(f"/app/assets/landing/{logo}", layout)
         self.assertIn("through University of Florida/IFAS. Formerly funded through Cornell University.", layout)
+        self.assertIn("Need assistance? Contact", layout)
+        self.assertIn("mailto:bi-science-team@ufl.edu", layout)
         self.assertEqual(stylesheet_response.status_code, 200)
         stylesheet = stylesheet_response.get_data(as_text=True)
         self.assertIn("--accent: #066a73", stylesheet)

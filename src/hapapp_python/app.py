@@ -1059,7 +1059,11 @@ def _terminal_text(state: RunState | None) -> str:
 
     text = "\n".join(state.log).strip()
     if state.error:
-        text = f"{text}\n\n{state.error}".strip()
+        assistance = (
+            f"If you need assistance, contact {config.BI_SCIENCE_TEAM_CONTACT} "
+            f"and include run ID {state.run_id}."
+        )
+        text = f"{text}\n\n{state.error}\n{assistance}".strip()
     return text or "Running..."
 
 
@@ -1644,6 +1648,18 @@ def _madc_submission_confirmation_modal() -> dbc.Modal:
     )
 
 
+def _science_team_contact(lead_in: str, className: str | None = None) -> html.P:
+    email = config.BI_SCIENCE_TEAM_EMAIL
+    return html.P(
+        [
+            f"{lead_in} the Breeding Insight Science team at ",
+            html.A(email, href=f"mailto:{email}"),
+            ".",
+        ],
+        className=className,
+    )
+
+
 def _madc_verification_details(exc: MADCValidationError) -> list:
     details: list = []
     if exc.errors:
@@ -1660,7 +1676,9 @@ def _madc_verification_details(exc: MADCValidationError) -> list:
                 html.Ul([html.Li(warning) for warning in exc.warnings], className="verification-list"),
             ]
         )
-    details.append(html.P("Please contact Breeding Insight for assistance.", className="verification-contact"))
+    details.append(
+        _science_team_contact("If you can't resolve these errors, contact", className="verification-contact")
+    )
     return details
 
 
@@ -2119,6 +2137,7 @@ def create_app() -> Dash:
                         ],
                         className="app-partner-logos",
                     ),
+                    _science_team_contact("Need assistance? Contact", className="app-assistance"),
                     html.P(
                         "Breeding Insight is funded by the U.S. Department of Agriculture (USDA) "
                         "Agricultural Research Service (ARS) through University of Florida/IFAS. "
@@ -2342,7 +2361,15 @@ def register_callbacks(app: Dash) -> None:
                         True,
                         no_update,
                         dbc.Alert(
-                            "The decline decision could not be recorded. The run remains awaiting a decision.",
+                            [
+                                html.P(
+                                    "The decline decision could not be recorded. "
+                                    "The run remains awaiting a decision."
+                                ),
+                                _science_team_contact(
+                                    "Please try again. If it keeps failing, contact", className="mb-0"
+                                ),
+                            ],
                             color="danger",
                         ),
                         no_update,
@@ -2441,7 +2468,15 @@ def register_callbacks(app: Dash) -> None:
                     color="danger",
                 )
                 if stale_awaiting_decision
-                else dbc.Alert(state.review_feedback, color="danger")
+                else dbc.Alert(
+                    [
+                        html.P(state.review_feedback),
+                        _science_team_contact("Please try again. If it keeps failing, contact", className="mb-0"),
+                    ]
+                    if state.review_feedback.startswith("GitHub publication failed")
+                    else state.review_feedback,
+                    color="danger",
+                )
                 if awaiting_decision and state.review_feedback
                 else (
                     "Review the run summary. Downloading shares the processed MADC, metadata, and workflow "
@@ -2594,7 +2629,16 @@ def register_callbacks(app: Dash) -> None:
                 location,
                 email,
                 None,
-                dbc.Alert(str(exc), color="danger", className="panel-identification-alert"),
+                dbc.Alert(
+                    [
+                        html.P(str(exc)),
+                        _science_team_contact(
+                            "If you believe this file should be supported, contact", className="mb-0"
+                        ),
+                    ],
+                    color="danger",
+                    className="panel-identification-alert",
+                ),
                 "identified-panel-value identified-panel-value--error",
             )
 
@@ -2698,7 +2742,7 @@ def register_callbacks(app: Dash) -> None:
                 raise ValueError(
                     "This MADC filename and formal project ID were already processed "
                     f"(run {duplicate.get('run_id')}, status {duplicate.get('submission_status')}). "
-                    "Contact Breeding Insight if the prior record should be replaced."
+                    f"To replace the prior record, contact {config.BI_SCIENCE_TEAM_CONTACT}."
                 )
 
             # User-facing MADC parameters live on the selected species panel.
@@ -2707,7 +2751,11 @@ def register_callbacks(app: Dash) -> None:
             # Check local tools before creating a run that cannot execute.
             missing = missing_madc_commands(panel)
             if missing:
-                raise ValueError("Missing required commands: " + ", ".join(missing))
+                raise ValueError(
+                    "Missing required commands: "
+                    + ", ".join(missing)
+                    + f". This is a server configuration problem. Contact {config.BI_SCIENCE_TEAM_CONTACT}."
+                )
 
             run_root = RUN_BASE / "madc" / uuid.uuid4().hex
             work_dir = run_root / "work"

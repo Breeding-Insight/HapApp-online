@@ -22,6 +22,7 @@ from hapapp_python.app import (
     _fixed_madc_result_file,
     _identify_uploaded_madc_panel,
     _list_files,
+    _madc_verification_details,
     _madc_previous_db_version,
     _madc_result_summary,
     _madc_submission_confirmation_modal,
@@ -35,6 +36,7 @@ from hapapp_python.app import (
     _snapshot_for_owner,
     _split_madc_result_options,
     _status_text,
+    _terminal_text,
     _sync_submission_state,
     _publish_run_to_github,
     _write_run_metadata_file,
@@ -51,7 +53,7 @@ from hapapp_python.madc_submission import (
 )
 from hapapp_python.panels import ResolvedMADCPanel
 from hapapp_python.panels import MADCPanel
-from hapapp_python.madc_validation import MADCPanelIdentificationError
+from hapapp_python.madc_validation import MADCPanelIdentificationError, MADCValidationError
 
 
 def _resolved_panel(work_dir: Path, allele_db_name: str = "alfalfa_allele_db_v010.fa") -> ResolvedMADCPanel:
@@ -230,6 +232,32 @@ class AppResultTests(unittest.TestCase):
             )
 
             self.assertEqual(_madc_submission_db_version(state), "v011")
+
+    def test_verification_details_offer_science_team_contact(self) -> None:
+        details = str(_madc_verification_details(MADCValidationError(["Bad header"])))
+
+        self.assertIn("If you can't resolve these errors, contact the Breeding Insight Science team", details)
+        self.assertIn("mailto:bi-science-team@ufl.edu", details)
+
+    def test_failed_run_terminal_text_includes_assistance_and_run_id(self) -> None:
+        state = RunState(
+            run_id="run-123",
+            kind="MADC",
+            work_dir=Path("/work"),
+            input_files=set(),
+            command=[],
+            status="failed",
+            error="Workflow exited with status 1",
+        )
+
+        text = _terminal_text(state)
+
+        self.assertIn("Workflow exited with status 1", text)
+        self.assertIn(
+            "If you need assistance, contact the Breeding Insight Science team at bi-science-team@ufl.edu "
+            "and include run ID run-123.",
+            text,
+        )
 
     def test_submission_summary_hides_internal_status_and_freshness(self) -> None:
         state = RunState(

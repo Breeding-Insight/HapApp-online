@@ -4,6 +4,8 @@ import os
 from urllib.parse import urlparse
 
 APP_ENV = os.getenv("APP_ENV", os.getenv("HAPAPP_APP_ENV", "development"))
+BI_SCIENCE_TEAM_EMAIL = "bi-science-team@ufl.edu"
+BI_SCIENCE_TEAM_CONTACT = f"the Breeding Insight Science team at {BI_SCIENCE_TEAM_EMAIL}"
 
 APP_HOST = os.getenv("HAPAPP_HOST", "127.0.0.1")
 APP_PORT = int(os.getenv("PORT", os.getenv("HAPAPP_PORT", "8050")))

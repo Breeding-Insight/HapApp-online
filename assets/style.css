@@ -792,6 +792,14 @@ label,
   filter: brightness(0) invert(1);
 }
 
+.app-assistance {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 auto 10px;
+  text-align: center;
+}
+
 .app-funding {
   color: #ffffff;
   font-size: 14px;
