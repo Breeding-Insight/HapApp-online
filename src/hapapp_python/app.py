@@ -3000,25 +3000,18 @@ def register_callbacks(app: Dash) -> None:
             _append_log(run_id, "Submission metadata recorded in database.")
             if replaced_run_id:
                 _append_log(run_id, f"This run replaces earlier unshared run {replaced_run_id} of the same MADC file.")
-            if madc_check.warnings:
-                alert = dbc.Alert(
-                    [
-                        html.Strong(f"Run started for {resolved_panel.label}, but the MADC pre-check found warnings."),
-                        html.Ul([html.Li(warning) for warning in madc_check.warnings[:8]]),
-                    ],
-                    color="warning",
-                    className="run-alert",
-                )
-            else:
-                alert = dbc.Alert(
-                    (
-                        f"Run started for {resolved_panel.label}. MADC pre-check passed: "
-                        f"{madc_check.n_data_rows:,} allele rows, "
-                        f"{madc_check.n_clone_ids:,} CloneIDs."
-                    ),
-                    color="info",
-                    className="run-alert",
-                )
+            # Pre-check warnings do not block a run; keep them in the server log rather than the UI.
+            for warning in madc_check.warnings:
+                LOGGER.warning("MADC pre-check warning for run %s: %s", run_id, warning)
+            alert = dbc.Alert(
+                (
+                    f"Run started for {resolved_panel.label}. MADC pre-check passed: "
+                    f"{madc_check.n_data_rows:,} allele rows, "
+                    f"{madc_check.n_clone_ids:,} CloneIDs."
+                ),
+                color="info",
+                className="run-alert",
+            )
 
             return run_id, alert, False, [], False, no_update, None
         except MADCValidationError as exc:
