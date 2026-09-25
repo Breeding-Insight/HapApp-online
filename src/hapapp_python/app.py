@@ -1251,9 +1251,9 @@ def _selected_submission_summary(state: RunState | None, selected: list[str]) ->
                     html.Dd(metadata.get("submitted_for_location") or "Not available"),
                     html.Dt("Email"),
                     html.Dd(metadata.get("submitted_for_email") or "Not available"),
-                    html.Dt("Previous haplotype database version"),
+                    html.Dt("Previous microhaplotype database version"),
                     html.Dd(previous_db_version or "Not available"),
-                    html.Dt("Proposed haplotype database version"),
+                    html.Dt("Proposed microhaplotype database version"),
                     html.Dd(
                         f"No change ({previous_db_version})"
                         if zero_new_alleles and previous_db_version
@@ -1337,9 +1337,9 @@ def _editable_submission_summary(state: RunState | None, selected: list[str]) ->
                             required=True,
                         )
                     ),
-                    html.Dt("Previous haplotype database version"),
+                    html.Dt("Previous microhaplotype database version"),
                     html.Dd(previous_db_version or "Not available"),
-                    html.Dt("Proposed haplotype database version"),
+                    html.Dt("Proposed microhaplotype database version"),
                     html.Dd(
                         f"No change ({previous_db_version})"
                         if zero_new_alleles and previous_db_version
@@ -1552,7 +1552,7 @@ def _madc_results_modal() -> dbc.Modal:
                                 [
                                     html.Strong("Choose files to download to your computer."),
                                     " These checkbox selections do not change the files submitted to the "
-                                    "haplotype database.",
+                                    "microhaplotype database.",
                                 ],
                                 className="results-message",
                             ),
@@ -1617,17 +1617,30 @@ def _madc_results_modal() -> dbc.Modal:
     )
 
 
+def _sharing_notice(what_is_shared: str) -> html.Div:
+    return html.Div(
+        [
+            html.P("You are sharing your data with Breeding Insight", className="sharing-notice-title"),
+            html.P(
+                f"{what_is_shared} If this run found new microhaplotypes, they are added to the "
+                "Breeding Insight microhaplotype database.",
+                className="mb-0",
+            ),
+        ],
+        className="sharing-notice",
+        role="note",
+    )
+
+
 def _madc_submission_confirmation_modal() -> dbc.Modal:
     return dbc.Modal(
         [
             dbc.ModalHeader(dbc.ModalTitle("Confirm Sharing and Download", id="madc-submission-confirmation-modal-title"), close_button=False),
             dbc.ModalBody(
                 [
-                    html.P(
-                        "By downloading these results, you agree to share the processed MADC, contribution "
-                        "metadata, and workflow log with Breeding Insight. Breeding Insight will review the "
-                        "files for incorporation. Runs with novel alleles may also update the configured GitHub "
-                        "database branch before download."
+                    _sharing_notice(
+                        "By downloading these results, you agree to share the processed MADC, your submission "
+                        "metadata, and the workflow log with Breeding Insight. Breeding Insight will review them."
                     ),
                     html.Div(id="madc-submission-edit-message"),
                     html.Div(id="madc-submission-confirmation-summary"),
@@ -2648,9 +2661,14 @@ def register_callbacks(app: Dash) -> None:
                     color="danger",
                 )
                 if awaiting_decision and state.review_feedback
-                else (
-                    "Review the run summary. Downloading shares the processed MADC, metadata, and workflow "
-                    "log with Breeding Insight for review."
+                else html.Div(
+                    [
+                        _sharing_notice(
+                            "When you download these results, the processed MADC, your submission metadata, "
+                            "and the workflow log are shared with Breeding Insight for review."
+                        ),
+                        html.P("Review the run summary below before downloading.", className="mb-0 mt-3"),
+                    ]
                 )
                 if awaiting_decision
                 else _submission_review_alert(state)

@@ -717,6 +717,23 @@ textarea:focus-visible,
   }
 }
 
+.sharing-notice {
+  background: #fff8e1;
+  border: 2px solid #8a5a00;
+  border-left-width: 8px;
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 15px;
+  padding: 14px 16px;
+}
+
+.sharing-notice-title {
+  color: #5c3d00;
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
 .replace-run-summary {
   display: grid;
   gap: 6px 16px;

@@ -384,8 +384,10 @@ class AppResultTests(unittest.TestCase):
     def test_confirmation_explains_sharing_and_review(self) -> None:
         modal = str(_madc_submission_confirmation_modal())
 
+        self.assertIn("You are sharing your data with Breeding Insight", modal)
         self.assertIn("agree to share the processed MADC", modal)
         self.assertIn("Breeding Insight will review", modal)
+        self.assertIn("Breeding Insight microhaplotype database", modal)
         self.assertIn("Agree, Share, and Download", modal)
 
     def test_download_callback_waits_while_github_publication_is_in_flight(self) -> None:
