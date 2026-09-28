@@ -42,4 +42,4 @@ build/
 
 # Local UI verification artifacts
 .playwright-mcp/
-hapapp-*.png
+/hapapp-*.png
