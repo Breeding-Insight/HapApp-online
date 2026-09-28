@@ -3,7 +3,7 @@ name: Publish landing page to GitHub Pages
 # Publishes the static landing/ folder as-is. Requires Settings > Pages > Source: "GitHub Actions".
 on:
   push:
-    branches: [main]
+    branches: [main, cloud_run]  # cloud_run while testing; remove once this runs from main
     paths:
       - "landing/**"
       - ".github/workflows/pages.yml"
