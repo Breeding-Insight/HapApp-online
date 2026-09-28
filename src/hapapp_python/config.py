@@ -13,6 +13,8 @@ DEBUG_MODE = os.getenv("HAPAPP_DEBUG", "0").lower() in ("true", "1", "yes")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
 PUBLIC_URL = os.getenv("HAPAPP_PUBLIC_URL", "").rstrip("/")
 PUBLIC_HOST = urlparse(PUBLIC_URL).netloc
+# Public landing page on GitHub Pages; signed-out visitors to "/" are sent there (else to sign-in).
+LANDING_URL = os.getenv("HAPAPP_LANDING_URL", "").strip()
 TLS_ENABLED = os.getenv("TLS_ENABLED", "false").lower() in ("true", "1", "yes")
 TLS_CERT_PATH = os.getenv("TLS_CERT_PATH", "/cert.pem")
 TLS_KEY_PATH = os.getenv("TLS_KEY_PATH", "/key.pem")

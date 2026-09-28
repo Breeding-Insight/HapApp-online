@@ -1,11 +1,16 @@
 <!doctype html>
+<!--
+  HapApp landing page, published to GitHub Pages by .github/workflows/pages.yml.
+  The Cloud Run app URL appears in both sign-in links and on the wake.js script tag at the
+  bottom of the page; update all three together. Update "Last updated" when content changes.
+-->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="HapApp processes raw DArTag MADC reports against Breeding Insight's public microhaplotype databases and assigns fixed allele IDs ready for downstream analysis.">
     <title>HapApp | Breeding Insight</title>
-    <link rel="icon" type="image/png" href="{{ asset_base }}/hapapp-icon.png">
+    <link rel="icon" type="image/png" href="assets/hapapp-icon.png">
     <style>
       :root {
         --ink: #1b2733;
@@ -80,6 +85,15 @@
       .btn-primary:hover { background: var(--primary-strong); color: #ffffff; }
       .btn-secondary { background: var(--surface); color: var(--primary-strong); border-color: var(--primary); }
       .btn-secondary:hover { background: var(--surface-tint); color: var(--primary-strong); }
+      .btn[aria-busy="true"] { cursor: progress; }
+      .launch-spinner {
+        width: 18px; height: 18px; flex: none; border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.45); border-top-color: #ffffff;
+        animation: launch-spin 0.9s linear infinite;
+      }
+      @keyframes launch-spin { to { transform: rotate(360deg); } }
+      .launch-status { flex-basis: 100%; margin: 4px 0 0; font-size: 0.9375rem; color: var(--ink-muted); }
+      .launch-status:empty { display: none; }
       .orcid-icon { width: 24px; height: 24px; flex: none; background: #ffffff; border-radius: 50%; }
 
       /* Hero */
@@ -204,6 +218,7 @@
       }
       @media (prefers-reduced-motion: reduce) {
         html { scroll-behavior: auto; }
+        .launch-spinner { animation-duration: 2.4s; }
         * { transition: none !important; }
       }
       @media (forced-colors: active) {
@@ -227,11 +242,11 @@
       <div class="wrap">
         <div class="brand">
           <a href="https://breedinginsight.org/">
-            <img class="bi-logo" src="{{ asset_base }}/breeding-insight-logo.png" width="280" height="102" alt="Breeding Insight">
+            <img class="bi-logo" src="assets/breeding-insight-logo.png" width="280" height="102" alt="Breeding Insight">
           </a>
           <span class="brand-divider" aria-hidden="true"></span>
-          <a class="app-brand" href="/">
-            <img src="{{ asset_base }}/hapapp-logo.png" width="127" height="48" alt="HapApp">
+          <a class="app-brand" href="./">
+            <img src="assets/hapapp-logo.png" width="127" height="48" alt="HapApp">
           </a>
         </div>
         <nav class="site-nav" aria-label="Page sections">
@@ -256,7 +271,7 @@
               database for your species, and adds any newly discovered microhaplotypes to it.
             </p>
             <div class="hero-actions">
-              <a class="btn btn-primary" href="{{ login_url }}">
+              <a class="btn btn-primary" href="https://hapapp-online-510101458052.us-west1.run.app/auth/login" data-launch>
                 <svg class="orcid-icon" aria-hidden="true" focusable="false"><use href="#icon-orcid"/></svg>
                 Sign in with ORCID iD
               </a>
@@ -267,7 +282,7 @@
               <a class="nowrap" href="mailto:bi-science-team@ufl.edu?subject=HapApp%20access%20request">bi-science-team@ufl.edu</a>.
             </p>
           </div>
-          <img class="hero-logo" src="{{ asset_base }}/hapapp-icon.png" width="240" height="240" alt="">
+          <img class="hero-logo" src="assets/hapapp-icon.png" width="240" height="240" alt="">
         </div>
       </section>
 
@@ -362,28 +377,119 @@
             </p>
           </div>
           <div class="grid grid-3">
-            {% for tool in tools %}
-            <article class="card tool-card" aria-labelledby="tool-{{ loop.index }}">
+            
+            <article class="card tool-card" aria-labelledby="tool-1">
               <div class="tool-head">
-                {% if tool.logo %}
-                <img class="tool-logo{% if tool.logo_wide %} wide{% endif %}" src="{{ asset_base }}/tools/{{ tool.logo }}" alt="" loading="lazy">
-                {% else %}
-                <span class="tool-logo-fallback" aria-hidden="true">{{ tool.name }}</span>
-                {% endif %}
+                
+                <img class="tool-logo" src="assets/tools/bigapp.png" alt="" loading="lazy">
+                
                 <div>
-                  <span class="tool-tag">{{ tool.tag }}</span>
-                  <h3 id="tool-{{ loop.index }}">{{ tool.name }}</h3>
+                  <span class="tool-tag">Genomic analysis</span>
+                  <h3 id="tool-1">BIGapp</h3>
                 </div>
               </div>
-              <p>{{ tool.description }}</p>
+              <p>A user-friendly Shiny app for genotype calling from read counts, population structure, GWAS, and genomic selection in diploid and polyploid species.</p>
               <div class="tool-links">
-                {% if tool.website %}
-                <a href="{{ tool.website }}"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for {{ tool.name }}</span></a>
-                {% endif %}
-                <a href="{{ tool.github }}"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for {{ tool.name }}</span></a>
+                
+                <a href="https://breedinginsight.org/bigapp/"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for BIGapp</span></a>
+                
+                <a href="https://github.com/Breeding-Insight/BIGapp"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for BIGapp</span></a>
               </div>
             </article>
-            {% endfor %}
+            
+            <article class="card tool-card" aria-labelledby="tool-2">
+              <div class="tool-head">
+                
+                <img class="tool-logo" src="assets/tools/qploidy2.png" alt="" loading="lazy">
+                
+                <div>
+                  <span class="tool-tag">Ploidy and CNV</span>
+                  <h3 id="tool-2">Qploidy2</h3>
+                </div>
+              </div>
+              <p>Estimates ploidy, aneuploidy, and large-scale copy number variation from genetic marker data.</p>
+              <div class="tool-links">
+                
+                <a href="https://breedinginsight.org/qploidy/"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for Qploidy2</span></a>
+                
+                <a href="https://github.com/Breeding-Insight/Qploidy2"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for Qploidy2</span></a>
+              </div>
+            </article>
+            
+            <article class="card tool-card" aria-labelledby="tool-3">
+              <div class="tool-head">
+                
+                <img class="tool-logo" src="assets/tools/allomate.png" alt="" loading="lazy">
+                
+                <div>
+                  <span class="tool-tag">Mate allocation</span>
+                  <h3 id="tool-3">AlloMate</h3>
+                </div>
+              </div>
+              <p>A Shiny app that simplifies mate allocation decisions for breeders.</p>
+              <div class="tool-links">
+                
+                <a href="https://breedinginsight.org/allomate/"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for AlloMate</span></a>
+                
+                <a href="https://github.com/Breeding-Insight/AlloMate"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for AlloMate</span></a>
+              </div>
+            </article>
+            
+            <article class="card tool-card" aria-labelledby="tool-4">
+              <div class="tool-head">
+                
+                <img class="tool-logo" src="assets/tools/bigr.png" alt="" loading="lazy">
+                
+                <div>
+                  <span class="tool-tag">R package</span>
+                  <h3 id="tool-4">BIGr</h3>
+                </div>
+              </div>
+              <p>Functions developed by Breeding Insight to analyze diploid and polyploid breeding and genetic data.</p>
+              <div class="tool-links">
+                
+                <a href="https://breeding-insight.github.io/BIGr_documentation/"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for BIGr</span></a>
+                
+                <a href="https://github.com/Breeding-Insight/BIGr"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for BIGr</span></a>
+              </div>
+            </article>
+            
+            <article class="card tool-card" aria-labelledby="tool-5">
+              <div class="tool-head">
+                
+                <img class="tool-logo" src="assets/tools/genobrew.png" alt="" loading="lazy">
+                
+                <div>
+                  <span class="tool-tag">Panel evaluation</span>
+                  <h3 id="tool-5">GenoBrew</h3>
+                </div>
+              </div>
+              <p>A Shiny app for evaluating marker panel efficiency and visualizing copy number variation profiles.</p>
+              <div class="tool-links">
+                
+                <a href="https://github.com/Breeding-Insight/GenoBrew"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for GenoBrew</span></a>
+              </div>
+            </article>
+            
+            <article class="card tool-card" aria-labelledby="tool-6">
+              <div class="tool-head">
+                
+                <img class="tool-logo wide" src="assets/tools/deltabreed.svg" alt="" loading="lazy">
+                
+                <div>
+                  <span class="tool-tag">Data management</span>
+                  <h3 id="tool-6">DeltaBreed</h3>
+                </div>
+              </div>
+              <p>Open-source breeding data management software for specialty crop and animal breeders.</p>
+              <div class="tool-links">
+                
+                <a href="https://breedinginsight.org/learning-hub/deltabreed/"><svg aria-hidden="true" focusable="false"><use href="#icon-globe"/></svg>Website<span class="visually-hidden"> for DeltaBreed</span></a>
+                
+                <a href="https://github.com/Breeding-Insight/DeltaBreed"><svg aria-hidden="true" focusable="false"><use href="#icon-github"/></svg>GitHub<span class="visually-hidden"> repository for DeltaBreed</span></a>
+              </div>
+            </article>
+            
           </div>
           <div class="more-links">
             <a class="btn btn-secondary" href="https://breedinginsight.org/open-source-software-solutions/">All Breeding Insight software</a>
@@ -401,7 +507,7 @@
             </p>
           </div>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="{{ login_url }}">
+            <a class="btn btn-primary" href="https://hapapp-online-510101458052.us-west1.run.app/auth/login" data-launch>
               <svg class="orcid-icon" aria-hidden="true" focusable="false"><use href="#icon-orcid"/></svg>
               Sign in with ORCID iD
             </a>
@@ -413,17 +519,17 @@
     <footer class="site-footer">
       <div class="wrap">
         <ul class="partner-logos" aria-label="Partner organizations">
-          <li class="logo-bi"><img src="{{ asset_base }}/breeding-insight-logo-white.png" width="154" height="56" alt="Breeding Insight"></li>
-          <li><img src="{{ asset_base }}/usda-ars-logo-white.png" width="139" height="44" alt="USDA Agricultural Research Service"></li>
-          <li class="logo-ifas"><a href="{{ uf_ifas_url }}"><img src="{{ asset_base }}/uf-ifas-logo.svg" width="132" height="44" alt="University of Florida Institute of Food and Agricultural Sciences (UF/IFAS)"></a></li>
-          <li><img src="{{ asset_base }}/cornell-logo-white.png" width="173" height="44" alt="Cornell University"></li>
+          <li class="logo-bi"><img src="assets/breeding-insight-logo-white.png" width="154" height="56" alt="Breeding Insight"></li>
+          <li><img src="assets/usda-ars-logo-white.png" width="139" height="44" alt="USDA Agricultural Research Service"></li>
+          <li class="logo-ifas"><a href="https://ifas.ufl.edu/"><img src="assets/uf-ifas-logo.svg" width="132" height="44" alt="University of Florida Institute of Food and Agricultural Sciences (UF/IFAS)"></a></li>
+          <li><img src="assets/cornell-logo-white.png" width="173" height="44" alt="Cornell University"></li>
         </ul>
         <p class="funding">
           Breeding Insight is funded by the U.S. Department of Agriculture (USDA) Agricultural Research Service (ARS)
           through University of Florida/IFAS. Formerly funded through Cornell University.
         </p>
         <div class="footer-bottom">
-          <p>&copy; {{ year }} Breeding Insight &middot; HapApp v{{ version }} &middot; Last updated {{ last_updated }}</p>
+          <p>&copy; 2026 Breeding Insight &middot; Last updated September 25, 2026</p>
           <ul>
             <li><a href="https://breedinginsight.org/about-bi/">About Breeding Insight</a></li>
             <li><a href="https://breedinginsight.org/contact-us/">Contact us</a></li>
@@ -432,5 +538,9 @@
         </div>
       </div>
     </footer>
+    
+    <script src="assets/wake.js" data-app-url="https://hapapp-online-510101458052.us-west1.run.app" data-health-path="/health"
+            data-app-name="HapApp" data-contact-email="bi-science-team@ufl.edu" defer></script>
+    
   </body>
 </html>

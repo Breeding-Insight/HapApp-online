@@ -115,14 +115,23 @@ gcloud run deploy hapapp-online \
   --cpu-boost \
   --no-cpu-throttling \
   --session-affinity \
-  --set-env-vars="APP_ENV=production,HAPAPP_ENV_FROM_PROCESS=1,HAPAPP_PUBLIC_URL=https://YOUR_SERVICE_URL,TLS_ENABLED=false,HAPAPP_DATASTORE=firestore,HAPAPP_DATASTORE_PREFLIGHT=true,GOOGLE_CLOUD_PROJECT=PROJECT_ID,FIRESTORE_DATABASE=hapapp-db,HAPAPP_GITHUB_PUBLISHING_RECOVERY_ENABLED=true,HAPAPP_TEST_ALFALFA_PANEL_REPO=https://github.com/ORG/SPECIES_REPOSITORY" \
+  --set-env-vars="APP_ENV=production,HAPAPP_ENV_FROM_PROCESS=1,HAPAPP_PUBLIC_URL=https://YOUR_SERVICE_URL,HAPAPP_LANDING_URL=https://breeding-insight.github.io/HapApp-online/,TLS_ENABLED=false,HAPAPP_DATASTORE=firestore,HAPAPP_DATASTORE_PREFLIGHT=true,GOOGLE_CLOUD_PROJECT=PROJECT_ID,FIRESTORE_DATABASE=hapapp-db,HAPAPP_GITHUB_PUBLISHING_RECOVERY_ENABLED=true,HAPAPP_TEST_ALFALFA_PANEL_REPO=https://github.com/ORG/SPECIES_REPOSITORY" \
   --set-secrets="SECRET_KEY=hapapp-session-secret:latest,ORCID_CLIENT_ID=hapapp-orcid-client-id:latest,ORCID_CLIENT_SECRET=hapapp-orcid-client-secret:latest,HAPAPP_GITHUB_TOKEN=hapapp-github-token:latest"
 ```
 
 Apply the Dropbox variables and secrets from `config/cloudrun.env.example` when the
 archive is enabled. Do not commit real credentials.
 
-## 6. Repository deployment
+## 6. Landing page
+
+The public landing page is a static site in `landing/`, published to GitHub Pages by
+`.github/workflows/pages.yml` on pushes to `main`. This service does not serve a landing
+page: signed-out visitors to `/` are redirected to `HAPAPP_LANDING_URL`, or to ORCID
+sign-in when it is empty. The service answers `GET /health` with `204` so the landing
+page can wake it from zero, and serves a `robots.txt` that disallows all crawling. See
+[landing-pages.md](landing-pages.md) for the shared pattern and setup.
+
+## 7. Repository deployment
 
 The root `Dockerfile` follows the Cloud Run container contract and honors the injected
 `PORT`. In Cloud Run, connect this repository and the `cloud_run` branch, and choose

@@ -29,7 +29,7 @@ from dash import Dash, Input, Output, State, ctx, dash_table, dcc, html, no_upda
 from dash.dependencies import ClientsideFunction
 from dash.exceptions import PreventUpdate
 from dash_iconify import DashIconify
-from flask import Flask, Response, redirect, render_template, request
+from flask import Flask, Response, redirect, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from hapapp_python import config
@@ -107,8 +107,11 @@ MADC_RUN_METADATA_FILENAME = "hapapp_madc_run_metadata.json"
 MADC_GITHUB_METADATA_FILENAME = "hapapp_github_contribution_metadata.json"
 APP_NAME = "HapApp"
 UF_IFAS_URL = "https://ifas.ufl.edu/"
-# Shown as "Last updated" on the landing and app pages; update when page content changes.
+# Shown as "Last updated" in the app footer; update when page content changes.
 SITE_LAST_UPDATED = date(2026, 9, 25)
+# Wake-up target for the static landing page. Not /healthz: Cloud Run reserves paths
+# ending in "z" and never forwards them to the container.
+HEALTH_PATH = "/health"
 LOGGER = logging.getLogger(__name__)
 TERMINAL_AUTO_SCROLL_SCRIPT = """
 window.dash_clientside = window.dash_clientside || {};
@@ -2090,71 +2093,6 @@ def _madc_tab() -> html.Div:
     )
 
 
-LANDING_TOOLS = (
-    {
-        "name": "BIGapp",
-        "logo": "bigapp.png",
-        "tag": "Genomic analysis",
-        "description": "A user-friendly Shiny app for genotype calling from read counts, population structure, GWAS, "
-        "and genomic selection in diploid and polyploid species.",
-        "website": "https://breedinginsight.org/bigapp/",
-        "github": "https://github.com/Breeding-Insight/BIGapp",
-    },
-    {
-        "name": "Qploidy2",
-        "logo": "qploidy2.png",
-        "tag": "Ploidy and CNV",
-        "description": "Estimates ploidy, aneuploidy, and large-scale copy number variation from genetic marker data.",
-        "website": "https://breedinginsight.org/qploidy/",
-        "github": "https://github.com/Breeding-Insight/Qploidy2",
-    },
-    {
-        "name": "AlloMate",
-        "logo": "allomate.png",
-        "tag": "Mate allocation",
-        "description": "A Shiny app that simplifies mate allocation decisions for breeders.",
-        "website": "https://breedinginsight.org/allomate/",
-        "github": "https://github.com/Breeding-Insight/AlloMate",
-    },
-    {
-        "name": "BIGr",
-        "logo": "bigr.png",
-        "tag": "R package",
-        "description": "Functions developed by Breeding Insight to analyze diploid and polyploid breeding and genetic data.",
-        "website": "https://breeding-insight.github.io/BIGr_documentation/",
-        "github": "https://github.com/Breeding-Insight/BIGr",
-    },
-    {
-        "name": "GenoBrew",
-        "logo": "genobrew.png",
-        "tag": "Panel evaluation",
-        "description": "A Shiny app for evaluating marker panel efficiency and visualizing copy number variation profiles.",
-        "website": None,
-        "github": "https://github.com/Breeding-Insight/GenoBrew",
-    },
-    {
-        "name": "DeltaBreed",
-        "logo": "deltabreed.svg",
-        "logo_wide": True,
-        "tag": "Data management",
-        "description": "Open-source breeding data management software for specialty crop and animal breeders.",
-        "website": "https://breedinginsight.org/learning-hub/deltabreed/",
-        "github": "https://github.com/Breeding-Insight/DeltaBreed",
-    },
-)
-
-
-def _landing_page() -> str:
-    return render_template(
-        "landing.html",
-        asset_base="/app/assets/landing",
-        login_url="/auth/login",
-        tools=LANDING_TOOLS,
-        uf_ifas_url=UF_IFAS_URL,
-        last_updated=_format_site_date(SITE_LAST_UPDATED),
-        version=__version__,
-        year=datetime.now(timezone.utc).year,
-    )
 
 
 def create_server() -> Flask:
@@ -2179,6 +2117,13 @@ def create_server() -> Flask:
             return redirect(f"{config.PUBLIC_URL}{request.full_path.rstrip('?')}", code=302)
         return None
 
+    @server.route(HEALTH_PATH)
+    def health():
+        # Lightweight wake-up target for the static landing page; touches no database or session.
+        response = Response(status=204)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @server.route("/robots.txt")
     def robots_txt():
         # Ask crawlers to stay away: every visit wakes the Cloud Run instance from zero.
@@ -2187,10 +2132,11 @@ def create_server() -> Flask:
         return response
 
     @server.route("/")
-    def landing_page():
+    def root():
+        # The public landing page lives on GitHub Pages (landing/); this service only hosts the app.
         if is_authenticated():
             return redirect("/app/")
-        return _landing_page()
+        return redirect(config.LANDING_URL or "/auth/login")
 
     @server.before_request
     def require_auth_for_app():
@@ -2229,7 +2175,7 @@ def create_app() -> Dash:
         {{%metas%}}
         <title>{{%title%}}</title>
         {{%favicon%}}
-        <link rel="icon" type="image/png" href="/app/assets/landing/hapapp-icon.png">
+        <link rel="icon" type="image/png" href="/app/assets/brand/hapapp-icon.png">
         {{%css%}}
       </head>
       <body>
@@ -2263,7 +2209,7 @@ def create_app() -> Dash:
                                     html.H1(APP_NAME, className="app-screen-reader-title"),
                                     html.A(
                                         html.Img(
-                                            src="/app/assets/landing/hapapp-logo.png",
+                                            src="/app/assets/brand/hapapp-logo.png",
                                             alt="HapApp",
                                             className="app-hapapp-logo",
                                         ),
@@ -2297,7 +2243,7 @@ def create_app() -> Dash:
                             html.Li(
                                 html.A(
                                     html.Img(
-                                        src="/app/assets/landing/breeding-insight-logo-white.png",
+                                        src="/app/assets/brand/breeding-insight-logo-white.png",
                                         alt="Breeding Insight",
                                     ),
                                     href="https://breedinginsight.org/",
@@ -2306,7 +2252,7 @@ def create_app() -> Dash:
                             ),
                             html.Li(
                                 html.Img(
-                                    src="/app/assets/landing/usda-ars-logo-white.png",
+                                    src="/app/assets/brand/usda-ars-logo-white.png",
                                     alt="United States Department of Agriculture Agricultural Research Service",
                                 ),
                                 className="app-footer-logo",
@@ -2314,7 +2260,7 @@ def create_app() -> Dash:
                             html.Li(
                                 html.A(
                                     html.Img(
-                                        src="/app/assets/landing/uf-ifas-logo.svg",
+                                        src="/app/assets/brand/uf-ifas-logo.svg",
                                         alt="University of Florida Institute of Food and Agricultural Sciences",
                                     ),
                                     href=UF_IFAS_URL,
@@ -2323,7 +2269,7 @@ def create_app() -> Dash:
                             ),
                             html.Li(
                                 html.Img(
-                                    src="/app/assets/landing/cornell-logo-white.png",
+                                    src="/app/assets/brand/cornell-logo-white.png",
                                     alt="Cornell University",
                                 ),
                                 className="app-footer-logo",
@@ -2346,7 +2292,11 @@ def create_app() -> Dash:
                             ),
                             html.Div(
                                 [
-                                    html.A("Public landing page", href="/"),
+                                    *(
+                                        [html.A("HapApp home page", href=config.LANDING_URL)]
+                                        if config.LANDING_URL
+                                        else []
+                                    ),
                                     html.A(
                                         "Source code",
                                         href="https://github.com/Breeding-Insight/HapApp-online",

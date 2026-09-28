@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from flask import Flask
@@ -139,29 +141,27 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(asset_response.status_code, 404)
         self.assertEqual(post_response.status_code, 302)
 
-    def test_landing_page_renders_sign_in_and_partner_logos_for_anonymous_user(self) -> None:
-        response = create_server().test_client().get("/")
-        body = response.get_data(as_text=True)
+    def test_root_sends_signed_out_visitors_to_sign_in_without_landing_url(self) -> None:
+        with patch.object(config, "LANDING_URL", ""):
+            response = create_server().test_client().get("/")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('href="/auth/login"', body)
-        self.assertIn("Sign in with ORCID iD", body)
-        self.assertIn("funded by the U.S. Department of Agriculture (USDA) Agricultural Research Service (ARS)", body)
-        for logo in (
-            "breeding-insight-logo-white.png",
-            "usda-ars-logo-white.png",
-            "uf-ifas-logo.svg",
-            "cornell-logo-white.png",
-            "hapapp-logo.png",
-            "hapapp-icon.png",
-            "tools/bigapp.png",
-            "tools/bigr.png",
-        ):
-            self.assertIn(f"/app/assets/landing/{logo}", body)
-        self.assertIn('<a href="https://ifas.ufl.edu/">', body)
-        self.assertIn("Last updated", body)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/auth/login")
 
-    def test_authenticated_app_uses_landing_page_brand_assets(self) -> None:
+    def test_static_landing_page_points_every_app_link_at_one_service(self) -> None:
+        page = (Path(__file__).resolve().parents[1] / "landing" / "index.html").read_text(encoding="utf-8")
+        wake_url = re.search(r'<script src="assets/wake\.js" data-app-url="([^"]+)"', page)
+        login_links = re.findall(r'href="([^"]+)/auth/login" data-launch', page)
+
+        self.assertIsNotNone(wake_url)
+        self.assertEqual(len(login_links), 2)
+        self.assertEqual(set(login_links), {wake_url.group(1)})
+        self.assertTrue(wake_url.group(1).startswith("https://"))
+        self.assertIn("funded by the U.S. Department of Agriculture (USDA) Agricultural Research Service (ARS)", page)
+        for asset in ("hapapp-logo.png", "uf-ifas-logo.svg", "tools/bigapp.png", "wake.js"):
+            self.assertTrue((Path(__file__).resolve().parents[1] / "landing" / "assets" / asset).is_file(), asset)
+
+    def test_authenticated_app_uses_brand_assets(self) -> None:
         with patch.object(config, "LOCAL_AUTH_BYPASS", True):
             app = create_app()
             client = app.server.test_client()
@@ -172,7 +172,7 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(index_response.status_code, 200)
         self.assertIn('<html lang="en">', index_response.get_data(as_text=True))
         self.assertIn(
-            '/app/assets/landing/hapapp-icon.png',
+            '/app/assets/brand/hapapp-icon.png',
             index_response.get_data(as_text=True),
         )
         self.assertEqual(layout_response.status_code, 200)
@@ -184,7 +184,7 @@ class AuthTests(unittest.TestCase):
             "uf-ifas-logo.svg",
             "cornell-logo-white.png",
         ):
-            self.assertIn(f"/app/assets/landing/{logo}", layout)
+            self.assertIn(f"/app/assets/brand/{logo}", layout)
         self.assertIn("through University of Florida/IFAS. Formerly funded through Cornell University.", layout)
         self.assertIn("Need assistance? Contact", layout)
         self.assertIn("madc-download-progress-modal", layout)
@@ -197,6 +197,20 @@ class AuthTests(unittest.TestCase):
         stylesheet = stylesheet_response.get_data(as_text=True)
         self.assertIn("--accent: #066a73", stylesheet)
         self.assertIn("--footer-bg: #0c3237", stylesheet)
+
+    def test_health_endpoint_answers_without_sign_in_or_session(self) -> None:
+        response = create_server().test_client().get("/health")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertNotIn("Set-Cookie", response.headers)
+
+    def test_root_redirects_to_static_landing_page_when_configured(self) -> None:
+        with patch.object(config, "LANDING_URL", "https://breeding-insight.github.io/HapApp-online/"):
+            response = create_server().test_client().get("/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "https://breeding-insight.github.io/HapApp-online/")
 
     def test_robots_txt_disallows_all_crawling(self) -> None:
         response = create_server().test_client().get("/robots.txt")
