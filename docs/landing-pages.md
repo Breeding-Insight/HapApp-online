@@ -67,8 +67,13 @@ HapApp is the reference implementation: `landing/` is the landing page, and
 - **Waits for a person.** It sends one wake-up request to the health path on the first
   mouse movement, scroll, touch, key press, or focus on a launch link, not on page load.
   It skips browsers that identify as automated or as bots.
-- **Once per visit.** A wake-up is remembered for five minutes in the browser session, so
-  reloads and extra tabs do not send more.
+- **Once per page load, then every five minutes of use.** Each page load sends its own
+  wake-up on the first interaction. While the page stays open, further activity sends
+  at most one more request every five minutes, which keeps the service warm while
+  someone is using the page and sends nothing while no one is.
+- **Treats the app as awake for five minutes.** A launch click within five minutes of the
+  service's last answer goes straight to the app; after that, the link waits for a fresh
+  answer, so a page left open for a long time never sends someone into a cold start.
 - **No cross-origin setup.** The request uses `no-cors`: the service only has to answer,
   and Cloud Run holds the request open while a cold instance starts.
 - **Handles a slow start on click.** If the app has not answered yet when a launch link is

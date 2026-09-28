@@ -23,10 +23,13 @@
 
   var START_TIMEOUT_MS = 90 * 1000;
   var RETRY_EVERY_MS = 2 * 1000;
-  var REMEMBER_WAKE_MS = 5 * 60 * 1000;
-  var storageKey = "cloud-run-wake:" + appUrl;
-  var ready = false;
-  var waking = null;
+  // Well inside Cloud Run's idle window (instances may stay up to 15 minutes after the last request).
+  var AWAKE_FOR_MS = 5 * 60 * 1000;
+  var REWAKE_AFTER_MS = 5 * 60 * 1000;
+  // Remembered only for this page load, so every visit sends its own wake-up request.
+  var lastWakeAt = 0;
+  var lastAnswerAt = 0;
+  var inFlight = null;
 
   function looksAutomated() {
     return (
@@ -35,20 +38,8 @@
     );
   }
 
-  function recentlyWoken() {
-    try {
-      return Date.now() - Number(sessionStorage.getItem(storageKey) || 0) < REMEMBER_WAKE_MS;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function rememberWake() {
-    try {
-      sessionStorage.setItem(storageKey, String(Date.now()));
-    } catch (error) {
-      // Storage may be unavailable (private browsing); waking still works.
-    }
+  function isAwake() {
+    return lastAnswerAt > 0 && Date.now() - lastAnswerAt < AWAKE_FOR_MS;
   }
 
   // An opaque "no-cors" response is enough: it arrives once the service answers, and
@@ -66,7 +57,6 @@
     }).then(
       function () {
         clearTimeout(timer);
-        ready = true;
         return true;
       },
       function () {
@@ -77,25 +67,32 @@
   }
 
   function wake() {
-    if (!waking) {
-      rememberWake();
-      waking = ping();
+    if (!inFlight) {
+      lastWakeAt = Date.now();
+      inFlight = ping().then(function (ok) {
+        inFlight = null;
+        if (ok) {
+          lastAnswerAt = Date.now();
+        }
+        return ok;
+      });
     }
-    return waking;
+    return inFlight;
   }
 
-  // Wake on the first sign of a person (not on page load), once per visit.
+  // Wake on the first sign of a person (not on page load), then again on activity at most
+  // every five minutes while the page stays open, so the service stays warm while it is used.
   var intentEvents = ["pointermove", "pointerdown", "keydown", "touchstart", "scroll", "focusin"];
-  function onIntent() {
-    intentEvents.forEach(function (name) {
-      window.removeEventListener(name, onIntent, true);
-    });
-    if (!looksAutomated() && !recentlyWoken()) {
+  function onActivity() {
+    if (inFlight || looksAutomated()) {
+      return;
+    }
+    if (lastWakeAt === 0 || Date.now() - lastWakeAt >= REWAKE_AFTER_MS) {
       wake();
     }
   }
   intentEvents.forEach(function (name) {
-    window.addEventListener(name, onIntent, { capture: true, passive: true });
+    window.addEventListener(name, onActivity, { capture: true, passive: true });
   });
 
   function statusFor(link) {
@@ -149,10 +146,8 @@
         if (ok) {
           window.location.href = link.href;
         } else if (Date.now() < deadline) {
-          waking = null;
           setTimeout(attempt, RETRY_EVERY_MS);
         } else {
-          waking = null;
           showFailed(link);
         }
       });
@@ -162,7 +157,7 @@
   document.querySelectorAll("[data-launch]").forEach(function (link) {
     link.addEventListener("click", function (event) {
       // Let new-tab and other modified clicks through; only handle plain clicks.
-      if (ready || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      if (isAwake() || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
         return;
       }
       event.preventDefault();
