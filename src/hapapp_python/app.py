@@ -108,7 +108,7 @@ MADC_GITHUB_METADATA_FILENAME = "hapapp_github_contribution_metadata.json"
 APP_NAME = "HapApp"
 UF_IFAS_URL = "https://ifas.ufl.edu/"
 # Shown as "Last updated" in the app footer; update when page content changes.
-SITE_LAST_UPDATED = date(2026, 9, 25)
+SITE_LAST_UPDATED = date(2026, 9, 28)
 # Wake-up target for the static landing page. Not /healthz: Cloud Run reserves paths
 # ending in "z" and never forwards them to the container.
 HEALTH_PATH = "/health"
