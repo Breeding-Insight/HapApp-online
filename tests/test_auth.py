@@ -94,6 +94,34 @@ class AuthTests(unittest.TestCase):
             "https://hapapp.example/auth/callback",
         )
 
+    def test_rejected_sign_in_does_not_keep_previous_approved_account(self) -> None:
+        client = create_server().test_client()
+        with client.session_transaction() as session:
+            session["orcid_id"] = "0000-0000-0000-0001"  # approved account signed in earlier
+            session["user_name"] = "Approved User"
+            session["user_role"] = "user"
+
+        with patch.object(config, "ORCID_CLIENT_ID", "client"):
+            login_response = client.get("/auth/login")
+        self.assertEqual(login_response.status_code, 302)
+        with client.session_transaction() as session:
+            self.assertNotIn("orcid_id", session)
+            state = session["oauth_state"]
+
+        token_response = Mock()
+        token_response.json.return_value = {"orcid": "0000-0000-0000-0002", "name": "Not Approved"}
+        token_response.raise_for_status.return_value = None
+        with patch("hapapp_python.auth.requests.post", return_value=token_response), patch(
+            "hapapp_python.auth.lookup_user", return_value=None
+        ):
+            callback_response = client.get(f"/auth/callback?state={state}&code=abc")
+        app_response = client.get("/app/")
+
+        self.assertEqual(callback_response.status_code, 403)
+        with client.session_transaction() as session:
+            self.assertNotIn("orcid_id", session)
+        self.assertEqual(app_response.status_code, 302)
+
     def test_callback_sets_hapsearch_compatible_session_for_active_user(self) -> None:
         client = self._auth_client()
         with client.session_transaction() as session:

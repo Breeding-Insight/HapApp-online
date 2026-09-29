@@ -70,6 +70,9 @@ def login():
     if config.LOCAL_AUTH_BYPASS:
         return redirect("/app/")
 
+    # Start every sign-in without an identity, so a rejected or failed callback cannot leave a
+    # previously signed-in account active in this browser.
+    session.clear()
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
     redirect_uri = _callback_url()
@@ -136,6 +139,7 @@ def callback():
         )
 
     profile = refresh_profile(orcid_id)
+    session.clear()
     _set_user_session(orcid_id, user, (profile or {}).get("display_name") or display_name)
     return redirect("/app/")
 
