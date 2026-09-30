@@ -268,9 +268,9 @@ body {
 }
 
 .submission-metadata--review {
-  background: rgba(220, 53, 69, 0.14);
-  border-color: #dc3545;
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.2);
+  background: rgba(27, 100, 221, 0.08);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px rgba(27, 100, 221, 0.18);
 }
 
 .submission-metadata--review .form-control {
@@ -288,15 +288,15 @@ body {
 }
 
 .metadata-review-toast .toast-header {
-  background: #f8d7da;
-  border-bottom-color: #f1aeb5;
-  color: #842029;
+  background: #dbe7fb;
+  border-bottom-color: #a9c4f2;
+  color: #0b3a82;
   font-weight: 700;
 }
 
 .metadata-review-toast .toast-body {
-  background: #fff5f5;
-  color: #58151c;
+  background: #f3f7fe;
+  color: #1b2733;
   font-size: 13px;
   line-height: 1.45;
 }

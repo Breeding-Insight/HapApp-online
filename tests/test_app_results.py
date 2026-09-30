@@ -841,7 +841,29 @@ class AppResultTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(fixed_file, "sample_snpID_rename_updatedSeq_v1.csv")
+        self.assertEqual(fixed_file, "sample_snpID_rename_updatedSeq.csv")
+
+    def test_finds_duplicate_removed_fixed_madc_file(self) -> None:
+        fixed_file = _fixed_madc_result_file(
+            [
+                "sample_snpID_rmDup_rename_updatedSeq.csv",
+                "sample_snpID_rmDup_rename_updatedSeq_rmDup.csv",
+                "sample_snpID_rmDup_rename_updatedSeq_rmDup_v1.csv",
+                "sample_snpID_rmDup_tmp_rename.csv",
+            ]
+        )
+
+        self.assertEqual(fixed_file, "sample_snpID_rmDup_rename_updatedSeq_rmDup.csv")
+
+    def test_hides_code_versioned_fixed_madc_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            work_dir = Path(tmp_dir)
+            for name in ("sample_snpID_rename.csv", "sample_snpID_rename_v1.csv", "sample_match_v1.fa"):
+                (work_dir / name).write_text("data", encoding="utf-8")
+
+            files = _list_files(work_dir, set())
+
+        self.assertEqual(files, ["sample_match_v1.fa", "sample_snpID_rename.csv"])
 
     def test_writes_run_log_file_for_review_archive(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

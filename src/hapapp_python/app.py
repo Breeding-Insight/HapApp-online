@@ -99,9 +99,14 @@ MAX_UPLOAD_MB = 1000 * 1024
 UPLOAD_CHUNK_MB = 16
 MADC_PREVIEW_EMPTY_MESSAGE = "Upload an MADC file to display a preview."
 MADC_MAIN_RESULT_PATTERN = re.compile(
-    r"_snpID_rename_updatedSeq\.csv$|_snpID_rename\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
+    r"_snpID(?:_rmDup)?_rename(?:_updatedSeq)?(?:_rmDup)?\.csv$|_v.*\.csv$|\.readme$|_v.*\.fa$|_matchCnt_lut\.txt$"
 )
 MADC_DB_VERSION_RE = re.compile(r"v(?P<version>\d{3})")
+# Fixed-allele MADC outputs: <report>_snpID[_rmDup]_rename[_updatedSeq][_rmDup][_<code version>].csv.
+# The code-versioned copy only adds a Code_version column that is not supported yet, so it is hidden.
+MADC_FIXED_RESULT_RE = re.compile(
+    r"^[^/]*_snpID(?:_rmDup)?_rename(?P<updated_seq>_updatedSeq)?(?P<rm_dup>_rmDup)?(?P<code_ver>_v[^/_]*)?\.csv$"
+)
 MADC_LOG_FILENAME = "hapapp_madc_workflow.log"
 MADC_RUN_METADATA_FILENAME = "hapapp_madc_run_metadata.json"
 MADC_GITHUB_METADATA_FILENAME = "hapapp_github_contribution_metadata.json"
@@ -368,7 +373,7 @@ def _list_files(work_dir: Path, input_files: set[str]) -> list[str]:
             continue
         relative = path.relative_to(work_dir).as_posix()
         under_ignored_dir = any(relative.startswith(f"{input_file}/") for input_file in ignored_inputs)
-        if relative in ignored_inputs or under_ignored_dir:
+        if relative in ignored_inputs or under_ignored_dir or _is_code_versioned_madc_copy(relative):
             continue
         files.append(relative)
     return sorted(files)
@@ -380,18 +385,21 @@ def _write_run_log_file(state: RunState) -> str:
     return MADC_LOG_FILENAME
 
 
-def _is_fixed_madc_result(file_path: str) -> bool:
-    if "/" in file_path or not file_path.endswith(".csv"):
-        return False
-    return "_snpID_rename" in file_path and re.search(r"_v[^/]*\.csv$", file_path) is not None
+def _is_code_versioned_madc_copy(file_path: str) -> bool:
+    match = MADC_FIXED_RESULT_RE.match(file_path)
+    return match is not None and match.group("code_ver") is not None
 
 
 def _fixed_madc_result_file(files: list[str]) -> str | None:
-    fixed_files = [file_path for file_path in files if _is_fixed_madc_result(file_path)]
+    fixed_files = [
+        (bool(match.group("rm_dup")), bool(match.group("updated_seq")), file_path)
+        for file_path in files
+        if (match := MADC_FIXED_RESULT_RE.match(file_path)) and match.group("code_ver") is None
+    ]
     if not fixed_files:
         return None
-    updated_seq = [file_path for file_path in fixed_files if "_updatedSeq_" in file_path]
-    return sorted(updated_seq or fixed_files)[-1]
+    # The workflow's final MADC is the latest step it reached: duplicate removal, then updated sequences.
+    return max(fixed_files)[2]
 
 
 def _append_log(run_id: str, line: str) -> None:
@@ -2003,12 +2011,12 @@ def _madc_tab() -> html.Div:
                                         _metadata_input("madc-submitted-for-email", "Email", "contact@example.org"),
                                         dbc.Toast(
                                             (
-                                                "Make sure the highlighted Submission Metadata section is accurate "
-                                                "before submitting. This information will be associated with the "
-                                                "processed MADC."
+                                                "Please check the highlighted Submission Metadata. It will be "
+                                                "associated with the processed MADC. If everything looks right, "
+                                                "select Process again to continue."
                                             ),
                                             id="madc-metadata-review-toast",
-                                            header="Review Submission Metadata",
+                                            header="One more step: review your metadata",
                                             is_open=False,
                                             dismissable=True,
                                             duration=None,
