@@ -80,20 +80,24 @@
     return inFlight;
   }
 
-  // Wake on the first sign of a person (not on page load), then again on activity at most
-  // every five minutes while the page stays open, so the service stays warm while it is used.
-  var intentEvents = ["pointermove", "pointerdown", "keydown", "touchstart", "scroll", "focusin"];
-  function onActivity() {
-    if (inFlight || looksAutomated()) {
-      return;
-    }
-    if (lastWakeAt === 0 || Date.now() - lastWakeAt >= REWAKE_AFTER_MS) {
-      wake();
-    }
-  }
-  intentEvents.forEach(function (name) {
-    window.addEventListener(name, onActivity, { capture: true, passive: true });
-  });
+  // Wake-on-visit is turned off for HapApp: its cold start is short, so the service now
+  // wakes only when someone clicks a launch link (handled below, with the spinner).
+  // Uncomment this block to restore it for an app with a slow cold start.
+  //
+  // // Wake on the first sign of a person (not on page load), then again on activity at most
+  // // every five minutes while the page stays open, so the service stays warm while it is used.
+  // var intentEvents = ["pointermove", "pointerdown", "keydown", "touchstart", "scroll", "focusin"];
+  // function onActivity() {
+  //   if (inFlight || looksAutomated()) {
+  //     return;
+  //   }
+  //   if (lastWakeAt === 0 || Date.now() - lastWakeAt >= REWAKE_AFTER_MS) {
+  //     wake();
+  //   }
+  // }
+  // intentEvents.forEach(function (name) {
+  //   window.addEventListener(name, onActivity, { capture: true, passive: true });
+  // });
 
   function statusFor(link) {
     var container = link.parentElement;

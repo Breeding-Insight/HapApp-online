@@ -64,6 +64,11 @@ HapApp is the reference implementation: `landing/` is the landing page, and
 
 ## What wake.js does
 
+> **HapApp:** wake-on-visit (the first two bullets below) is commented out in
+> `landing/assets/wake.js`, because HapApp's cold start is short. The service wakes only
+> when someone clicks a launch link, which still shows the starting state. Uncomment that
+> block for an app whose cold start is slow.
+
 - **Waits for a person.** It sends one wake-up request to the health path on the first
   mouse movement, scroll, touch, key press, or focus on a launch link, not on page load.
   It skips browsers that identify as automated or as bots.
