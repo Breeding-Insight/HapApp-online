@@ -123,6 +123,7 @@
       .section-head { max-width: 72ch; margin-bottom: 36px; }
       .section-head h2 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); letter-spacing: -0.015em; margin-bottom: 12px; }
       .section-head p { color: var(--ink-muted); font-size: 1.0625rem; }
+      .section-head p + p { margin-top: 12px; }
 
       .grid { display: grid; gap: 20px; }
       .grid-3 { grid-template-columns: repeat(3, 1fr); }
@@ -286,7 +287,33 @@
         </div>
       </section>
 
-      <section class="band" id="how" aria-labelledby="how-title">
+      <section class="band" id="madc" aria-labelledby="madc-title">
+        <div class="wrap">
+          <div class="section-head" style="margin-bottom:0">
+            <h2 id="madc-title">What makes MADC files different?</h2>
+            <p>
+              Most genotyping reports reduce each marker to two alleles, a reference and an alternative,
+              discarding any additional variation found at that locus. A DArTag Missing Allele Discovery Count
+              (MADC) report contains all alleles, including those &ldquo;missing&rdquo; from the initial panel
+              design, which are now recognized as newly discovered variants. Specifically, an MADC report retains
+              the full microhaplotype sequences found at each marker locus, along with read counts for every
+              allele at every locus across every sample. This means a single locus can carry many alleles rather
+              than just two, preserving the full scope of genetic variation captured by the sequencing read.
+              HapApp works directly with this multi-allelic data by processing the microhaplotype sequences in
+              the MADC report, rather than collapsing them to biallelic SNPs before analysis.
+            </p>
+            <p>
+              The practical advantage of keeping multi-allelic data is that nearby SNPs within a sequencing read
+              are inherited together on the same genomic segment. Therefore, the combination of variants is
+              recorded rather than each variant being called independently. Collapsing into a single SNP
+              discards this co-occurrence information, reducing a potentially highly informative multi-allelic
+              marker to a simple presence/absence call.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band alt" id="how" aria-labelledby="how-title">
         <div class="wrap split">
           <div class="section-head" style="margin-bottom:0">
             <h2 id="how-title">How HapApp works</h2>
@@ -309,7 +336,7 @@
             </li>
             <li>
               <strong>Fixed IDs.</strong>
-              Each microhaplotype is compared with the species database using BLAST. Known microhaplotypes keep
+              Each microhaplotype is compared with the database for your species using BLAST. Known microhaplotypes keep
               their established IDs, new ones get new unique IDs, and duplicate sequences are merged so each has
               exactly one ID.
             </li>
@@ -323,13 +350,13 @@
         </div>
       </section>
 
-      <section class="band alt" id="why" aria-labelledby="why-title">
+      <section class="band" id="why" aria-labelledby="why-title">
         <div class="wrap">
           <div class="section-head" style="margin-bottom:0">
             <h2 id="why-title">Why process against a public reference?</h2>
             <p>
               DArTag reports name alleles project by project, so the same microhaplotype can carry different
-              labels in different orders, even within your own program. Processing against the public database
+              labels in different projects, even within your own program. Processing against the public database
               gives each microhaplotype one permanent ID. You can combine data across years and projects,
               compare your germplasm with other programs, and move straight into downstream analysis.
             </p>
@@ -337,7 +364,7 @@
         </div>
       </section>
 
-      <section class="band" id="database" aria-labelledby="database-title">
+      <section class="band alt" id="database" aria-labelledby="database-title">
         <div class="wrap split">
           <div>
             <div class="section-head" style="margin-bottom:0">
@@ -367,7 +394,7 @@
         </div>
       </section>
 
-      <section class="band alt" id="tools" aria-labelledby="tools-title">
+      <section class="band" id="tools" aria-labelledby="tools-title">
         <div class="wrap">
           <div class="section-head">
             <h2 id="tools-title">Continue your analysis with Breeding Insight tools</h2>
